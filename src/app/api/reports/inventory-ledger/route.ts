@@ -1,6 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
+import Item from "@/models/Item";
 import { lineStockQty } from "@/lib/itemUnits";
 import mongoose from "mongoose";
 
@@ -119,14 +120,21 @@ export async function GET(req: Request) {
       }
     }
 
-    let runningBalance = 0;
+    const itemObj = await Item.findById(itemOid).select("stockQtyCartons").lean();
+    const currentStock = itemObj ? ((itemObj as any).stockQtyCartons || 0) : 0;
+
+    const totalInAllTime = rows.reduce((sum, r) => sum + r.in, 0);
+    const totalOutAllTime = rows.reduce((sum, r) => sum + r.out, 0);
+    const initialStock = Math.max(0, currentStock - totalInAllTime + totalOutAllTime);
+
+    let runningBalance = initialStock;
     const rowsWithBalance = rows.map((row) => {
       runningBalance += row.in - row.out;
       if (runningBalance < 0) runningBalance = 0;
       return { ...row, balance: runningBalance };
     });
 
-    let openingBalance = 0;
+    let openingBalance = initialStock;
     const beforeRows = rowsWithBalance.filter(row => fromDate && new Date(row.date) < fromDate);
     if (beforeRows.length > 0) {
       openingBalance = beforeRows[beforeRows.length - 1].balance;

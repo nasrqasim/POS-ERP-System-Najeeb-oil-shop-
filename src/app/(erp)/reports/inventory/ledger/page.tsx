@@ -335,6 +335,7 @@ export default function InventoryLedgerReportPage() {
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">G.S.T.</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amt. Incl. Tax</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Balance Qty</th>
+                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -368,6 +369,14 @@ export default function InventoryLedgerReportPage() {
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-400 text-right">0.00</td>
                             <td className="px-4 py-3 text-[11px] font-bold text-slate-700 text-right">{row.total.toFixed(2)}</td>
                             <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">{row.balance.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleInvoiceClick(row.refNo)}
+                                className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto"
+                              >
+                                <Eye size={10} /> View Invoice
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
