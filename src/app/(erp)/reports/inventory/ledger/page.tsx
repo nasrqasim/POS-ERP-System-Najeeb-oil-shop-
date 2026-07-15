@@ -342,20 +342,25 @@ export default function InventoryLedgerReportPage() {
                       {data.map((row, i) => {
                         const qty = row.in > 0 ? row.in : row.out;
                         const grossAmt = qty * row.rate;
+                        const isOpening = row.refNo === "Opening";
                         return (
-                          <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <tr key={i} className={isOpening ? "bg-emerald-50 dark:bg-emerald-950/30 border-b-2 border-emerald-200 dark:border-emerald-800" : "hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"}>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}</td>
-                            <td className="px-4 py-3 text-[11px] font-bold text-blue-600">
-                              <button 
-                                onClick={() => handleInvoiceClick(row.refNo)}
-                                className="hover:underline flex items-center gap-1 text-left"
-                              >
-                                {row.refNo}
-                              </button>
+                            <td className={`px-4 py-3 text-[11px] font-bold ${isOpening ? "text-emerald-700 dark:text-emerald-400" : "text-blue-600"}`}>
+                              {isOpening ? (
+                                <span className="flex items-center gap-1">📦 {row.refNo}</span>
+                              ) : (
+                                <button 
+                                  onClick={() => handleInvoiceClick(row.refNo)}
+                                  className="hover:underline flex items-center gap-1 text-left"
+                                >
+                                  {row.refNo}
+                                </button>
+                              )}
                             </td>
                             <td 
-                              className="px-4 py-3 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:text-blue-600 hover:underline cursor-pointer"
-                              onClick={() => handleInvoiceClick(row.refNo)}
+                              className={`px-4 py-3 text-[11px] font-medium ${isOpening ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-slate-700 dark:text-slate-200 hover:text-blue-600 hover:underline cursor-pointer"}`}
+                              onClick={isOpening ? undefined : () => handleInvoiceClick(row.refNo)}
                             >
                               {row.partyName || "Walk-in (Cash) Customer"}
                             </td>
@@ -370,12 +375,14 @@ export default function InventoryLedgerReportPage() {
                             <td className="px-4 py-3 text-[11px] font-bold text-slate-700 text-right">{row.total.toFixed(2)}</td>
                             <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">{row.balance.toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">
-                              <button
-                                onClick={() => handleInvoiceClick(row.refNo)}
-                                className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto"
-                              >
-                                <Eye size={10} /> View Invoice
-                              </button>
+                              {!isOpening && (
+                                <button
+                                  onClick={() => handleInvoiceClick(row.refNo)}
+                                  className="px-2 py-1 bg-maroon-800 text-white rounded text-[10px] font-bold hover:bg-maroon-900 flex items-center justify-center gap-1 mx-auto"
+                                >
+                                  <Eye size={10} /> View Invoice
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );

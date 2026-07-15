@@ -120,21 +120,46 @@ export async function GET(req: Request) {
       }
     }
 
-    const itemObj = await Item.findById(itemOid).select("stockQtyCartons").lean();
+    const itemObj = await Item.findById(itemOid).select("stockQtyCartons createdAt purchaseRate").lean();
     const currentStock = itemObj ? ((itemObj as any).stockQtyCartons || 0) : 0;
 
     const totalInAllTime = rows.reduce((sum, r) => sum + r.in, 0);
     const totalOutAllTime = rows.reduce((sum, r) => sum + r.out, 0);
     const initialStock = Math.max(0, currentStock - totalInAllTime + totalOutAllTime);
 
-    let runningBalance = initialStock;
+    // Insert opening balance as the first row (like PV 215 in Excel)
+    if (initialStock > 0) {
+      const itemCreatedAt = (itemObj as any)?.createdAt;
+      const openingDate = itemCreatedAt
+        ? new Date(itemCreatedAt)
+        : rows.length > 0
+          ? new Date(rows[0].date)
+          : new Date();
+      const pRate = (itemObj as any)?.purchaseRate || 0;
+
+      rows.unshift({
+        date: openingDate,
+        refNo: "Opening",
+        type: "OPENING BALANCE",
+        location: "",
+        partyName: "Opening Balance",
+        in: initialStock,
+        out: 0,
+        rate: pRate,
+        total: initialStock * pRate,
+      });
+    }
+
+    // Start running balance from 0 (opening stock is now included as a row)
+    let runningBalance = 0;
     const rowsWithBalance = rows.map((row) => {
       runningBalance += row.in - row.out;
       if (runningBalance < 0) runningBalance = 0;
       return { ...row, balance: runningBalance };
     });
 
-    let openingBalance = initialStock;
+    // Date range filtering
+    let openingBalance = 0;
     const beforeRows = rowsWithBalance.filter(row => fromDate && new Date(row.date) < fromDate);
     if (beforeRows.length > 0) {
       openingBalance = beforeRows[beforeRows.length - 1].balance;
@@ -154,7 +179,7 @@ export async function GET(req: Request) {
 
     return ok({
       rows: periodRows,
-      openingBalance,
+      openingBalance: initialStock,
       totalIn,
       totalOut,
       closingBalance,
