@@ -27,6 +27,11 @@ export default function InventoryLedgerReportPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [displayUnit, setDisplayUnit] = useState<"cartons" | "gallons" | "litres">("cartons");
+
+  const unitMultiplier = displayUnit === "gallons" ? 4 : displayUnit === "litres" ? 16 : 1;
+  const unitLabel = displayUnit === "gallons" ? "Gallons" : displayUnit === "litres" ? "Litres" : "CTNs";
+  const unitShort = displayUnit === "gallons" ? "Gal" : displayUnit === "litres" ? "Ltr" : "CTN";
 
   const handleInvoiceClick = (refNo: string) => {
     const inv = invoices.find(i => i.invoiceNo === refNo);
@@ -181,10 +186,10 @@ export default function InventoryLedgerReportPage() {
   const selectedItemObj = items.find(i => i._id === selectedItemId);
 
   const stats = [
-    { title: "Opening Balance", value: summary.openingBalance.toLocaleString(), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
-    { title: "Total In (Qty)", value: summary.totalIn.toLocaleString(), icon: ArrowUpRight, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
-    { title: "Total Out (Qty)", value: summary.totalOut.toLocaleString(), icon: ArrowDownRight, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
-    { title: "Closing Balance", value: summary.closingBalance.toLocaleString(), icon: Box, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
+    { title: `Opening Balance (${unitShort})`, value: (summary.openingBalance * unitMultiplier).toLocaleString(), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
+    { title: `Total In (${unitShort})`, value: (summary.totalIn * unitMultiplier).toLocaleString(), icon: ArrowUpRight, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
+    { title: `Total Out (${unitShort})`, value: (summary.totalOut * unitMultiplier).toLocaleString(), icon: ArrowDownRight, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
+    { title: `Closing Balance (${unitShort})`, value: (summary.closingBalance * unitMultiplier).toLocaleString(), icon: Box, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
   ];
 
   const Filters = (
@@ -216,6 +221,18 @@ export default function InventoryLedgerReportPage() {
         <div className="space-y-1">
           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">To Date</label>
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Display Unit</label>
+          <select
+            value={displayUnit}
+            onChange={(e) => setDisplayUnit(e.target.value as any)}
+            className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
+          >
+            <option value="cartons">Cartons (CTNs)</option>
+            <option value="gallons">Gallons (1 CTN = 4 Gal)</option>
+            <option value="litres">Litres (1 CTN = 16 Ltr)</option>
+          </select>
         </div>
       </div>
       
@@ -250,7 +267,7 @@ export default function InventoryLedgerReportPage() {
 
   const trendData = data.map(t => ({
     name: new Date(t.date).toLocaleDateString('default', { day: '2-digit', month: 'short' }),
-    balance: t.balance
+    balance: t.balance * unitMultiplier
   }));
 
   return (
@@ -261,7 +278,16 @@ export default function InventoryLedgerReportPage() {
       filters={Filters}
       actions={[
         { label: "Print Ledger", onClick: printPage, icon: Printer },
-        { label: "Export Excel", onClick: () => exportToExcel(selectedItemId ? data : filteredItems, "InventoryLedger.xlsx"), icon: FileSpreadsheet },
+        { label: "Export Excel", onClick: () => {
+          const exportData = selectedItemId ? data.map(row => ({
+            ...row,
+            in: row.in * unitMultiplier,
+            out: row.out * unitMultiplier,
+            balance: row.balance * unitMultiplier,
+            unit: unitLabel,
+          })) : filteredItems;
+          exportToExcel(exportData, `InventoryLedger_${unitLabel}.xlsx`);
+        }, icon: FileSpreadsheet },
       ]}
     >
       <div className="space-y-6">
@@ -325,8 +351,8 @@ export default function InventoryLedgerReportPage() {
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Date</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Tran. No.</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Party Name</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty In</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty Out</th>
+                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty In ({unitShort})</th>
+                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Qty Out ({unitShort})</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Unit</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Rate</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Gross Amount</th>
@@ -334,7 +360,7 @@ export default function InventoryLedgerReportPage() {
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amt. Excl. Tax</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">G.S.T.</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Amt. Incl. Tax</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Balance Qty</th>
+                        <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Balance ({unitShort})</th>
                         <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center w-28">Action</th>
                       </tr>
                     </thead>
@@ -364,16 +390,16 @@ export default function InventoryLedgerReportPage() {
                             >
                               {row.partyName || "Walk-in (Cash) Customer"}
                             </td>
-                            <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">{row.in > 0 ? row.in.toFixed(2) : ""}</td>
-                            <td className="px-4 py-3 text-[11px] font-black text-rose-600 text-right">{row.out > 0 ? row.out.toFixed(2) : ""}</td>
-                            <td className="px-4 py-3 text-[11px] font-medium text-slate-400">-</td>
+                            <td className="px-4 py-3 text-[11px] font-black text-emerald-600 text-right">{row.in > 0 ? (row.in * unitMultiplier).toFixed(2) : ""}</td>
+                            <td className="px-4 py-3 text-[11px] font-black text-rose-600 text-right">{row.out > 0 ? (row.out * unitMultiplier).toFixed(2) : ""}</td>
+                            <td className="px-4 py-3 text-[11px] font-medium text-slate-400">{unitShort}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-500 text-right">{row.rate.toFixed(2)}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-600 text-right">{grossAmt.toFixed(2)}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-400 text-right">0.00</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-600 text-right">{grossAmt.toFixed(2)}</td>
                             <td className="px-4 py-3 text-[11px] font-medium text-slate-400 text-right">0.00</td>
                             <td className="px-4 py-3 text-[11px] font-bold text-slate-700 text-right">{row.total.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">{row.balance.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm font-black text-slate-800 dark:text-slate-100 text-right">{(row.balance * unitMultiplier).toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">
                               {!isOpening && (
                                 <button
@@ -392,20 +418,20 @@ export default function InventoryLedgerReportPage() {
                         <td colSpan={3} className="px-4 py-3 text-[10px] uppercase tracking-widest text-slate-500"></td>
                         <td className="px-2 py-2 text-right">
                           <span className="inline-block px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[11px] font-bold text-slate-800 dark:text-slate-100 min-w-[70px]">
-                            {summary.totalIn.toFixed(2)}
+                            {(summary.totalIn * unitMultiplier).toFixed(2)}
                           </span>
                         </td>
                         <td className="px-2 py-2 text-right">
                           <span className="inline-block px-3 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[11px] font-bold text-slate-800 dark:text-slate-100 min-w-[70px]">
-                            {summary.totalOut.toFixed(2)}
+                            {(summary.totalOut * unitMultiplier).toFixed(2)}
                           </span>
                         </td>
                         <td colSpan={7} className="px-4 py-3 text-right text-xs font-black text-slate-700 dark:text-slate-300">
-                          Balance
+                          Balance ({unitShort})
                         </td>
                         <td className="px-2 py-2 text-right">
                           <span className="inline-block px-4 py-1 bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded text-xs font-black text-blue-700 dark:text-blue-400 min-w-[80px]">
-                            {summary.closingBalance.toFixed(2)}
+                            {(summary.closingBalance * unitMultiplier).toFixed(2)}
                           </span>
                         </td>
                       </tr>
