@@ -120,8 +120,10 @@ export async function GET(req: Request) {
       }
     }
 
-    const itemObj = await Item.findById(itemOid).select("stockQtyCartons createdAt purchaseRate").lean();
+    const itemObj = await Item.findById(itemOid).select("stockQtyCartons createdAt purchaseRate gallonsInCtn litersInCtn").lean();
     const currentStock = itemObj ? ((itemObj as any).stockQtyCartons || 0) : 0;
+    const gallonsInCtn = itemObj ? ((itemObj as any).gallonsInCtn || 0) : 0;
+    const litersInCtn = itemObj ? ((itemObj as any).litersInCtn || 0) : 0;
 
     const totalInAllTime = rows.reduce((sum, r) => sum + r.in, 0);
     const totalOutAllTime = rows.reduce((sum, r) => sum + r.out, 0);
@@ -183,6 +185,8 @@ export async function GET(req: Request) {
       totalIn,
       totalOut,
       closingBalance,
+      gallonsInCtn,
+      litersInCtn,
     });
   } catch (e) {
     return fail((e as Error).message);

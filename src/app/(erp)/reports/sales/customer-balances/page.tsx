@@ -33,12 +33,8 @@ export default function CustomerBalancesReportPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   useEffect(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    setFromDate(`${year}-${month}-01`);
-    setToDate(`${year}-${month}-${day}`);
+    setFromDate("2025-01-01");
+    setToDate("2026-07-16");
   }, []);
 
   useEffect(() => {
@@ -107,7 +103,8 @@ export default function CustomerBalancesReportPage() {
 
     const result = rawParties.map((p: any) => {
       const partyId = p._id;
-      const initialOpening = Number(p.openingBalance) || 0;
+      // Use absolute value of opening balance for display (receivables/payables should be positive)
+      const initialOpening = Math.abs(Number(p.openingBalance) || 0);
 
       // Filter transactions for this customer
       const pInvoices = invoices.filter((inv: any) => inv.partyId?._id === partyId || inv.partyId === partyId);
@@ -118,21 +115,6 @@ export default function CustomerBalancesReportPage() {
 
       // Collect all transactions into a single list
       const txs: any[] = [];
-
-      if (p.manualDebit) {
-        txs.push({
-          date: new Date("2000-01-01T00:00:00.000Z"),
-          debit: Number(p.manualDebit) || 0,
-          credit: 0
-        });
-      }
-      if (p.manualCredit) {
-        txs.push({
-          date: new Date("2000-01-01T00:00:00.000Z"),
-          debit: 0,
-          credit: Number(p.manualCredit) || 0
-        });
-      }
 
       pInvoices.forEach((s: any) => {
         const isReturn = s.type === "sale_return" || s.type === "non_tax_sale_return";

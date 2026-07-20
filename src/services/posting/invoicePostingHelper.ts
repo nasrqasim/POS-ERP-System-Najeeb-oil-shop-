@@ -834,3 +834,156 @@ export async function postBankPaymentJournalEntries(payment: any) {
     await JournalEntry.create(entries);
   }
 }
+
+export async function adjustManualBalancesForClosing(partyId: string | null, body: any) {
+  if (body.closingBalance === undefined) return body;
+
+  const closingBalance = Number(body.closingBalance) || 0;
+  let openingBalance = Number(body.openingBalance) || 0;
+
+  let debitTx = 0;
+  let creditTx = 0;
+
+  const isCust = partyId 
+    ? (await Party.findById(partyId).lean() as any)?.type === "Customer" 
+    : (body.type === "Customer");
+
+  if (partyId) {
+    const party = await Party.findById(partyId).lean() as any;
+    if (!party) return body;
+
+    if (body.openingBalance === undefined) {
+      openingBalance = Number(party.openingBalance) || 0;
+    }
+
+    // 1. Sum up all invoices for this party
+    const invoices = await Invoice.find({ partyId, status: { $ne: "cancelled" } }).lean();
+    let totalInvoices = 0;
+    let totalReturns = 0;
+
+    for (const inv of invoices) {
+      const total = Number(inv.totalAmount) || 0;
+      const type = inv.type;
+      if (isCust) {
+        if (["sale", "non_tax_sale", "pos", "challan"].includes(type)) {
+          totalInvoices += total;
+        } else if (["sale_return", "non_tax_sale_return"].includes(type)) {
+          totalReturns += total;
+        }
+      } else {
+        if (["purchase", "non_tax_purchase", "import_purchase"].includes(type)) {
+          totalInvoices += total;
+        } else if (["purchase_return", "non_tax_purchase_return"].includes(type)) {
+          totalReturns += total;
+        }
+      }
+    }
+
+    // 2. Sum up all receipts / payments for this party
+    let totalReceiptsPayments = 0;
+    let totalAdjustments = 0;
+
+    if (isCust) {
+      const cashReceipts = await CashReceipt.find({ partyId, status: { $ne: "Cancelled" } }).lean();
+      const bankReceipts = await BankReceipt.find({
+        $or: [{ party: partyId }, { party: String(partyId) }],
+        status: { $ne: "Cancelled" },
+      }).lean();
+
+      const cashSum = cashReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      const bankSum = bankReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+      let totalReceivedAtCreation = 0;
+      for (const inv of invoices) {
+        if (["sale", "non_tax_sale", "pos", "challan"].includes(inv.type)) {
+          const invNo = inv.invoiceNo;
+          const linkedCashAmt = cashReceipts
+            .filter((r: any) => r.reference === invNo || (r.narration && r.narration.toLowerCase().includes(invNo.toLowerCase())))
+            .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+          const linkedBankAmt = bankReceipts
+            .filter((r: any) => r.instrumentNo === invNo || (r.instrumentNo && r.instrumentNo.toLowerCase().includes(invNo.toLowerCase())))
+            .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+          const paidAtCreation = Math.max(0, (Number(inv.amountReceived) || 0) - (linkedCashAmt + linkedBankAmt));
+          totalReceivedAtCreation += paidAtCreation;
+        }
+      }
+
+      totalReceiptsPayments = cashSum + bankSum + totalReceivedAtCreation;
+
+      const cashPayments = await CashPayment.find({
+        $or: [{ partyId }, { vendor: partyId }],
+        status: { $ne: "Cancelled" },
+      }).lean();
+      const bankPayments = await BankPayment.find({ vendor: partyId, status: { $ne: "Cancelled" } }).lean();
+      
+      totalAdjustments = cashPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) +
+                         bankPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+      debitTx = totalInvoices + totalAdjustments;
+      creditTx = totalReturns + totalReceiptsPayments;
+    } else {
+      const cashPayments = await CashPayment.find({
+        $or: [{ partyId }, { vendor: partyId }],
+        status: { $ne: "Cancelled" },
+      }).lean();
+      const bankPayments = await BankPayment.find({ vendor: partyId, status: { $ne: "Cancelled" } }).lean();
+      
+      const cashSum = cashPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const bankSum = bankPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+      let totalPaidAtCreation = 0;
+      for (const inv of invoices) {
+        if (["purchase", "non_tax_purchase", "import_purchase"].includes(inv.type)) {
+          const invNo = inv.invoiceNo;
+          const linkedCashAmt = cashPayments
+            .filter((p: any) => p.reference === invNo || (p.narration && p.narration.toLowerCase().includes(invNo.toLowerCase())))
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+          const linkedBankAmt = bankPayments
+            .filter((p: any) => p.instrumentNo === invNo || (p.instrumentNo && p.instrumentNo.toLowerCase().includes(invNo.toLowerCase())))
+            .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+          const paidAtCreation = Math.max(0, (Number(inv.amountReceived) || 0) - (linkedCashAmt + linkedBankAmt));
+          totalPaidAtCreation += paidAtCreation;
+        }
+      }
+
+      totalReceiptsPayments = cashSum + bankSum + totalPaidAtCreation;
+
+      const cashReceipts = await CashReceipt.find({ partyId, status: { $ne: "Cancelled" } }).lean();
+      const bankReceipts = await BankReceipt.find({
+        $or: [{ party: partyId }, { party: String(partyId) }],
+        status: { $ne: "Cancelled" },
+      }).lean();
+      
+      totalAdjustments = cashReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) +
+                         bankReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+      creditTx = totalInvoices + totalAdjustments;
+      debitTx = totalReturns + totalReceiptsPayments;
+    }
+  }
+
+  if (isCust) {
+    const diff = closingBalance - openingBalance - debitTx + creditTx;
+    if (diff >= 0) {
+      body.manualDebit = diff;
+      body.manualCredit = 0;
+    } else {
+      body.manualDebit = 0;
+      body.manualCredit = -diff;
+    }
+  } else {
+    const diff = closingBalance - openingBalance - creditTx + debitTx;
+    if (diff >= 0) {
+      body.manualCredit = diff;
+      body.manualDebit = 0;
+    } else {
+      body.manualCredit = 0;
+      body.manualDebit = -diff;
+    }
+  }
+
+  return body;
+}
+

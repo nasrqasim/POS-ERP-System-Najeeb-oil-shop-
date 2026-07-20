@@ -123,7 +123,14 @@ export default function CustomerBalancesPage() {
       companyName: data.name, 
       name: data.name || "Unknown",
       code: data.code || `CUST-${Date.now()}`,
-      type: "Customer"
+      type: "Customer",
+      openingBalance: data.openingBalance || 0,
+      closingBalance: data.closingBalance || 0,
+      manualDebit: data.manualDebit || 0,
+      manualCredit: data.manualCredit || 0,
+      debit: data.manualDebit || 0,
+      credit: data.manualCredit || 0,
+      balance: data.closingBalance !== undefined ? data.closingBalance : (data.openingBalance || 0)
     };
 
     try {
@@ -651,11 +658,11 @@ export default function CustomerBalancesPage() {
                       return totalOpening < 0 ? `-Rs. ${Math.abs(totalOpening).toLocaleString()}` : `+Rs. ${totalOpening.toLocaleString()}`;
                     })()}
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-rose-600">
-                    -Rs. {filteredCustomers.reduce((acc, c) => acc + (c.debit || 0), 0).toLocaleString()}
-                  </td>
                   <td className="px-6 py-4 text-sm font-bold text-emerald-600">
-                    +Rs. {filteredCustomers.reduce((acc, c) => acc + (c.credit || 0), 0).toLocaleString()}
+                    +Rs. {filteredCustomers.reduce((acc, c) => acc + (c.debit || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-bold text-rose-600">
+                    -Rs. {filteredCustomers.reduce((acc, c) => acc + (c.credit || 0), 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-100">
                     {(() => {

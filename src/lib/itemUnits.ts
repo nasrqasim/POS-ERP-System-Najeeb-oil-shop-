@@ -1,92 +1,131 @@
-/** Carton / gallon / litre conversion helpers (aligned with sale invoice logic). */
+/** Carton / gallon / litre conversion helpers — single source of truth from item master. */
 
-export function isFilterItem(name?: string, description?: string): boolean {
-  const text = `${name || ""} ${description || ""}`.toLowerCase();
-  return text.includes("filter") || text.includes("fliter");
-}
-
-export type PackSizeMode = "sale" | "purchase";
-
-export function getPackSizes(
-  item?: {
-    name?: string;
-    gallonsInCtn?: number;
-    litersInCtn?: number;
-  } | null,
-  mode: PackSizeMode = "sale"
-) {
-  const g = Number(item?.gallonsInCtn);
-  const l = Number(item?.litersInCtn);
-
-  // Item master overrides when both pack sizes are set
-  if (g > 0 && l > 0) {
-    return { gallonsInCtn: g, litersInCtn: l };
-  }
-
-  // Purchase: always use oil-style carton pack (4 gal / 16 L) unless master has values
-  if (mode === "purchase") {
-    return {
-      gallonsInCtn: g > 0 ? g : 4,
-      litersInCtn: l > 0 ? l : 16,
-    };
-  }
-
-  // Sale: filters/spare parts count as 1 piece per carton
-  const isFilter = isFilterItem(item?.name);
-  return {
-    gallonsInCtn: isFilter ? 1 : g > 0 ? g : 4,
-    litersInCtn: isFilter ? 1 : l > 0 ? l : 16,
-  };
-}
-
-export function applyCartonGallonLiterConversion<
-  T extends { cartons?: number | string; gallons?: number | string; liters?: number | string }
->(
-  line: T,
-  field: "cartons" | "gallons" | "liters",
-  value: number,
-  item?: { name?: string; gallonsInCtn?: number; litersInCtn?: number } | null,
-  mode: PackSizeMode = "sale"
-): T {
-  const { gallonsInCtn, litersInCtn } = getPackSizes(item, mode);
-  const updated = { ...line };
-
-  if (field === "cartons") {
-    updated.cartons = value;
-    updated.gallons = value * gallonsInCtn;
-    updated.liters = value * litersInCtn;
-  } else if (field === "gallons") {
-    updated.gallons = value;
-    updated.cartons = gallonsInCtn > 0 ? value / gallonsInCtn : 0;
-    updated.liters = gallonsInCtn > 0 ? (value / gallonsInCtn) * litersInCtn : 0;
-  } else if (field === "liters") {
-    updated.liters = value;
-    updated.cartons = litersInCtn > 0 ? value / litersInCtn : 0;
-    updated.gallons = litersInCtn > 0 ? (value / litersInCtn) * gallonsInCtn : 0;
-  }
-
-  return updated;
-}
+export type PackItem = {
+  name?: string;
+  gallonsInCtn?: number;
+  litersInCtn?: number;
+} | null | undefined;
 
 export type UnitLine = {
   cartons?: number | string;
   gallons?: number | string;
   liters?: number | string;
+  entryUnit?: "cartons" | "gallons" | "liters";
 };
+
+export type PackSizes = { gallonsInCtn: number; litersInCtn: number };
+
+/** Read pack sizes from the selected item master record only (no hardcoded defaults). */
+export function getPackSizes(item?: PackItem): PackSizes {
+  return {
+    gallonsInCtn: Math.max(0, Number(item?.gallonsInCtn) || 0),
+    litersInCtn: Math.max(0, Number(item?.litersInCtn) || 0),
+  };
+}
+
+export function validateItemPackSizes(
+  gallonsInCtn: unknown,
+  litersInCtn: unknown
+): { ok: true } | { ok: false; message: string } {
+  const g = Number(gallonsInCtn);
+  const l = Number(litersInCtn);
+
+  if (gallonsInCtn === "" || litersInCtn === "" || gallonsInCtn == null || litersInCtn == null) {
+    return { ok: false, message: "Gallons and litres per carton are required." };
+  }
+  if (Number.isNaN(g) || Number.isNaN(l)) {
+    return { ok: false, message: "Gallons and litres per carton must be valid numbers." };
+  }
+  if (g <= 0) {
+    return { ok: false, message: "Gallons per carton must be greater than zero." };
+  }
+  if (l <= 0) {
+    return { ok: false, message: "Litres per carton must be greater than zero." };
+  }
+  if (g < 0 || l < 0) {
+    return { ok: false, message: "Conversion values cannot be negative." };
+  }
+  return { ok: true };
+}
+
+export function cartonsToGallons(cartons: number, item?: PackItem): number {
+  const { gallonsInCtn } = getPackSizes(item);
+  return roundUnit(cartons * gallonsInCtn);
+}
+
+export function cartonsToLiters(cartons: number, item?: PackItem): number {
+  const { litersInCtn } = getPackSizes(item);
+  return roundUnit(cartons * litersInCtn);
+}
+
+export function stockToDisplayUnits(
+  cartons: number,
+  item?: PackItem
+): { cartons: number; gallons: number; liters: number } {
+  const c = Number(cartons) || 0;
+  return {
+    cartons: roundUnit(c),
+    gallons: cartonsToGallons(c, item),
+    liters: cartonsToLiters(c, item),
+  };
+}
+
+export function unitMultiplierForDisplay(
+  displayUnit: "cartons" | "gallons" | "litres" | "liters",
+  item?: PackItem
+): number {
+  const { gallonsInCtn, litersInCtn } = getPackSizes(item);
+  if (displayUnit === "gallons") return gallonsInCtn;
+  if (displayUnit === "litres" || displayUnit === "liters") return litersInCtn;
+  return 1;
+}
+
+export function applyCartonGallonLiterConversion<
+  T extends UnitLine
+>(
+  line: T,
+  field: "cartons" | "gallons" | "liters",
+  value: number,
+  item?: PackItem
+): T {
+  const { gallonsInCtn, litersInCtn } = getPackSizes(item);
+  const updated = { ...line, entryUnit: field };
+
+  if (field === "cartons") {
+    // Gallons = Cartons × GPC
+    // Litres = Cartons × LPC
+    updated.cartons = value;
+    updated.gallons = gallonsInCtn > 0 ? value * gallonsInCtn : 0;
+    updated.liters = litersInCtn > 0 ? value * litersInCtn : 0;
+  } else if (field === "gallons") {
+    // Cartons = Gallons / GPC
+    // Then calculate litres from cartons: Litres = Cartons × LPC
+    updated.gallons = value;
+    updated.cartons = gallonsInCtn > 0 ? value / gallonsInCtn : 0;
+    updated.liters = litersInCtn > 0 ? updated.cartons * litersInCtn : 0;
+  } else if (field === "liters") {
+    // Cartons = Litres / LPC
+    // Then calculate gallons from cartons: Gallons = Cartons × GPC
+    updated.liters = value;
+    updated.cartons = litersInCtn > 0 ? value / litersInCtn : 0;
+    updated.gallons = gallonsInCtn > 0 ? updated.cartons * gallonsInCtn : 0;
+  }
+
+  return updated;
+}
 
 /** Apply a cartons/gallons/liters edit with linked conversion (skips sync while value is ""). */
 export function applyUnitFieldUpdate<T extends UnitLine>(
   line: T,
   field: "cartons" | "gallons" | "liters",
   value: number | string,
-  item?: { name?: string; gallonsInCtn?: number; litersInCtn?: number } | null,
-  mode: PackSizeMode = "sale"
+  item?: PackItem
 ): T {
   const updated = { ...line, [field]: value };
   if (value === "") return updated;
   const num = Number(value);
   if (Number.isNaN(num)) return updated;
-  const converted = applyCartonGallonLiterConversion(updated, field, num, item, mode);
+  const converted = applyCartonGallonLiterConversion(updated, field, num, item);
   return {
     ...converted,
     cartons: roundUnit(converted.cartons),
@@ -97,41 +136,48 @@ export function applyUnitFieldUpdate<T extends UnitLine>(
 
 function roundUnit(n: number | string | undefined): number {
   const v = Number(n) || 0;
-  return Math.round(v * 10000) / 10000;
+  // Use 6 decimal places for internal calculations to maintain precision
+  return Math.round(v * 1000000) / 1000000;
 }
 
-/** Default qty when an item is picked: 1 CTN → pack gallons/liters. */
-export function defaultUnitsForItem<T extends UnitLine>(
-  line: T,
-  item?: { name?: string; gallonsInCtn?: number; litersInCtn?: number } | null,
-  mode: PackSizeMode = "sale"
-): T {
-  const { gallonsInCtn, litersInCtn } = getPackSizes(item, mode);
+export function formatQtyDisplay(n: number | string | undefined, decimals: number = 3): string {
+  const v = roundUnit(n);
+  // If it's a whole number, show without decimals
+  if (Number.isInteger(v)) return v.toString();
+  // Show with specified decimal places, but remove trailing zeros
+  const formatted = v.toFixed(decimals).replace(/\.?0+$/, '');
+  return formatted;
+}
+
+/** Default qty when an item is picked: 1 CTN → item pack gallons/liters. */
+export function defaultUnitsForItem<T extends UnitLine>(line: T, item?: PackItem): T {
+  const { gallonsInCtn, litersInCtn } = getPackSizes(item);
   return {
     ...line,
     cartons: 1,
     gallons: gallonsInCtn,
     liters: litersInCtn,
+    entryUnit: "cartons",
   };
 }
 
-/** Purchase invoices: 1 CTN → 4 GAL → 16 L (filters use master 1:1 only if set on item). */
-export const PURCHASE_PACK_MODE: PackSizeMode = "purchase";
+export function emptyUnitLine(): { cartons: number; gallons: number; liters: number } {
+  return { cartons: 0, gallons: 0, liters: 0 };
+}
 
+/** @deprecated Use applyUnitFieldUpdate — purchase uses the same item master conversion. */
 export function applyPurchaseUnitFieldUpdate<T extends UnitLine>(
   line: T,
   field: "cartons" | "gallons" | "liters",
   value: number | string,
-  item?: { name?: string; gallonsInCtn?: number; litersInCtn?: number } | null
+  item?: PackItem
 ): T {
-  return applyUnitFieldUpdate(line, field, value, item, PURCHASE_PACK_MODE);
+  return applyUnitFieldUpdate(line, field, value, item);
 }
 
-export function defaultPurchaseUnitsForItem<T extends UnitLine>(
-  line: T,
-  item?: { name?: string; gallonsInCtn?: number; litersInCtn?: number } | null
-): T {
-  return defaultUnitsForItem(line, item, PURCHASE_PACK_MODE);
+/** @deprecated Use defaultUnitsForItem — purchase uses the same item master conversion. */
+export function defaultPurchaseUnitsForItem<T extends UnitLine>(line: T, item?: PackItem): T {
+  return defaultUnitsForItem(line, item);
 }
 
 /** Resolve catalog item from line id or code (for unit sync when itemId missing). */
@@ -147,13 +193,61 @@ export function resolveCatalogItem<
   return undefined;
 }
 
-/** Stock movement quantity in pieces (cartons for filters and general line items). */
+/** Stock movement quantity in cartons (canonical inventory unit). */
 export function lineStockQty(line: { cartons?: number; qty?: number }): number {
   const cartons = Number(line.cartons) || 0;
   const qty = Number(line.qty) || 0;
   if (cartons > 0) return cartons;
   if (qty > 0) return qty;
   return 0;
+}
+
+export type ReceiptQtyDisplay = {
+  qtyLabel: string;
+  equivalentLabel?: string;
+};
+
+/** Format invoice line quantity for printed receipts. */
+export function formatReceiptLineQty(
+  line: UnitLine,
+  item?: PackItem
+): ReceiptQtyDisplay {
+  const cartons = roundUnit(line.cartons);
+  const gallons = roundUnit(line.gallons);
+  const liters = roundUnit(line.liters);
+  const entryUnit = line.entryUnit;
+
+  if (entryUnit === "gallons" && gallons > 0) {
+    return {
+      qtyLabel: `${formatQtyDisplay(gallons)} Gallons`,
+      equivalentLabel: `${formatQtyDisplay(cartons)} Cartons`,
+    };
+  }
+  if (entryUnit === "liters" && liters > 0) {
+    return {
+      qtyLabel: `${formatQtyDisplay(liters)} Litres`,
+      equivalentLabel: `${formatQtyDisplay(cartons)} Cartons`,
+    };
+  }
+  if (cartons > 0) {
+    return {
+      qtyLabel: `${formatQtyDisplay(cartons)} Cartons`,
+      equivalentLabel: `${formatQtyDisplay(gallons)} Gallons / ${formatQtyDisplay(liters)} Litres`,
+    };
+  }
+  if (gallons > 0) {
+    return {
+      qtyLabel: `${formatQtyDisplay(gallons)} Gallons`,
+      equivalentLabel: `${formatQtyDisplay(cartons)} Cartons`,
+    };
+  }
+  if (liters > 0) {
+    return {
+      qtyLabel: `${formatQtyDisplay(liters)} Litres`,
+      equivalentLabel: `${formatQtyDisplay(cartons)} Cartons`,
+    };
+  }
+  return { qtyLabel: "0" };
 }
 
 export function filterAndSortItems<

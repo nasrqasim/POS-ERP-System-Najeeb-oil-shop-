@@ -638,7 +638,7 @@ export default function CashBanksPage() {
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-500 space-y-1">
               <div className="flex justify-between">
                 <span>Opening:</span>
-                <span>PKR {fmt(card.data.opening)}</span>
+                <span>PKR {fmt(Math.abs(card.data.opening))}</span>
               </div>
               <div className="flex justify-between">
                 <span>Sales Collections:</span>
@@ -714,7 +714,7 @@ export default function CashBanksPage() {
                     {(activeViewTab === "daily" ? dailyRows : activeViewTab === "monthly" ? monthlyRows : yearlyRows).map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                         <td className="px-4 py-3.5 text-slate-900 dark:text-white font-extrabold">{row.label}</td>
-                        <td className="px-4 py-3.5 text-right">PKR {fmt(row.opening)}</td>
+                        <td className="px-4 py-3.5 text-right">PKR {fmt(Math.abs(row.opening))}</td>
                         <td className="px-4 py-3.5 text-right text-emerald-600">+PKR {fmt(row.salesReceipts)}</td>
                         <td className="px-4 py-3.5 text-right text-blue-600">+PKR {fmt(row.otherIncome)}</td>
                         <td className="px-4 py-3.5 text-right text-teal-600">+PKR {fmt(row.cashReceipts)}</td>
@@ -757,7 +757,7 @@ export default function CashBanksPage() {
                             <td className="px-4 py-3.5 text-blue-600 font-extrabold">{acc.code}</td>
                             <td className="px-4 py-3.5 text-slate-900 dark:text-white font-extrabold">{acc.title || acc.name}</td>
                             <td className="px-4 py-3.5 capitalize text-slate-400">{acc.type} Ledger</td>
-                            <td className="px-4 py-3.5 text-right text-slate-600">PKR {fmt(acc.opening)}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-600">PKR {fmt(Math.abs(acc.opening))}</td>
                             <td className="px-4 py-3.5 text-right text-emerald-600">PKR {fmt(acc.debit)}</td>
                             <td className="px-4 py-3.5 text-right text-rose-600">PKR {fmt(acc.credit)}</td>
                             <td className="px-4 py-3.5 text-right text-slate-900 dark:text-white font-black">PKR {fmt(acc.balance)}</td>

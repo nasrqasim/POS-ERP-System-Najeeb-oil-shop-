@@ -160,27 +160,6 @@ export default function VendorProfileHistory({
 
     const txs: any[] = [];
 
-    if (vendor.manualDebit) {
-      txs.push({
-        date: new Date("2000-01-01T00:00:00.000Z"),
-        voucherNo: "-",
-        type: "Adjustment",
-        remarks: "Opening Debit Adjustment",
-        debit: Number(vendor.manualDebit) || 0,
-        credit: 0
-      });
-    }
-    if (vendor.manualCredit) {
-      txs.push({
-        date: new Date("2000-01-01T00:00:00.000Z"),
-        voucherNo: "-",
-        type: "Adjustment",
-        remarks: "Opening Credit Adjustment",
-        debit: 0,
-        credit: Number(vendor.manualCredit) || 0
-      });
-    }
-
     // Process Purchases & Returns (Purchases increase credit (payable), Returns increase debit (receivable))
     purchases.forEach((p: any) => {
       const isReturn = p.type === "purchase_return" || p.type === "non_tax_purchase_return";

@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { formatReceiptLineQty } from "@/lib/itemUnits";
 
 interface ThermalReceiptProps {
   data: any;
@@ -153,12 +154,16 @@ export default function ThermalReceipt({
           const qty = item.qty || item.cartons || 1;
           const price = Math.round(item.unitPrice || item.rate || item.amount || 0);
           const total = Math.round(item.total || item.amount || item.netAmount || item.grossAmount || 0);
+          
+          // Use formatReceiptLineQty to get converted quantity display
+          const qtyDisplay = formatReceiptLineQty(item, item);
+          
           return (
             <div key={i} className="border-b border-dashed border-black pb-1.5">
               <div className="text-left font-black text-[12px] text-black leading-snug">{desc}</div>
               <div className="grid grid-cols-12 text-[12px] text-black font-black mt-0.5">
-                <span className="col-span-6"></span>
-                <span className="col-span-2 text-center">{formatQty(qty)}</span>
+                <span className="col-span-6 text-[10px] text-slate-600">{qtyDisplay.equivalentLabel || ""}</span>
+                <span className="col-span-2 text-center">{qtyDisplay.qtyLabel}</span>
                 <span className="col-span-2 text-right">{price.toLocaleString()}</span>
                 <span className="col-span-2 text-right font-black">{total.toLocaleString()}</span>
               </div>

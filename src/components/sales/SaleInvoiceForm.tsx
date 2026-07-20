@@ -26,6 +26,12 @@ import {
   ArrowRightLeft,
   ArrowLeft
 } from "lucide-react";
+import {
+  applyUnitFieldUpdate,
+  defaultUnitsForItem,
+  resolveCatalogItem,
+  formatQtyDisplay,
+} from "@/lib/itemUnits";
 
 interface SIItem {
   id: string;
@@ -35,6 +41,7 @@ interface SIItem {
   cartons: number;
   gallons: number;
   liters: number;
+  entryUnit?: "cartons" | "gallons" | "liters";
   ratePerCtn: number;
   grossAmount: number;
   discPercent: number;
@@ -141,20 +148,28 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
 
   const [items, setItems] = useState<SIItem[]>(() => {
     if (initialData?.lines && initialData.lines.length > 0) {
-      return initialData.lines.map((l: any, i: number) => ({
-        id: i.toString(),
-        itemId: l.itemId?._id || l.itemId,
-        itemCode: l.itemId?.code || "",
-        description: l.description || "",
-        cartons: l.cartons || l.qty || 0,
-        gallons: l.gallons || 0,
-        liters: l.liters || 0,
-        ratePerCtn: l.rate || 0,
-        grossAmount: l.grossAmount || 0,
-        discPercent: l.discountPercent || 0,
-        discount: (l.grossAmount * (l.discountPercent || 0)) / 100,
-        netAmount: l.netAmount || 0
-      }));
+      return initialData.lines.map((l: any, i: number) => {
+        // Determine entry unit based on which field was non-zero
+        let entryUnit: "cartons" | "gallons" | "liters" = "cartons";
+        if (l.liters > 0) entryUnit = "liters";
+        else if (l.gallons > 0) entryUnit = "gallons";
+        
+        return {
+          id: i.toString(),
+          itemId: l.itemId?._id || l.itemId,
+          itemCode: l.itemId?.code || "",
+          description: l.description || "",
+          cartons: l.cartons || l.qty || 0,
+          gallons: l.gallons || 0,
+          liters: l.liters || 0,
+          entryUnit,
+          ratePerCtn: l.rate || 0,
+          grossAmount: l.grossAmount || 0,
+          discPercent: l.discountPercent || 0,
+          discount: (l.grossAmount * (l.discountPercent || 0)) / 100,
+          netAmount: l.netAmount || 0
+        };
+      });
     }
     return [{
       id: "1",
@@ -164,6 +179,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
       cartons: 0,
       gallons: 0,
       liters: 0,
+      entryUnit: "cartons",
       ratePerCtn: 0,
       grossAmount: 0,
       discPercent: 0,
@@ -577,10 +593,13 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
       if (item) {
         const baseRate = isWholesale ? (item.wholesaleRate || item.rate || 0) : (item.retailRate || item.rate || 0);
         const ratePerCtn = formData.isOnCredit ? baseRate * 1.10 : baseRate;
-        const qty = Number(i.cartons) || 0;
-        const grossAmount = qty * ratePerCtn;
+        
+        // Gross Amount = Cartons × Rate Per Carton
+        const cartons = Number(i.cartons) || 0;
+        const grossAmount = cartons * ratePerCtn;
         const discount = (grossAmount * (i.discPercent || 0)) / 100;
         const netAmount = grossAmount - discount;
+        
         return { ...i, ratePerCtn, grossAmount, discount, netAmount };
       }
       return i;
@@ -588,7 +607,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
   };
 
   const addItem = () => {
-    const newItem = { id: Date.now().toString(), itemId: "", itemCode: "", description: "", cartons: 0, gallons: 0, liters: 0, ratePerCtn: 0, grossAmount: 0, discPercent: 0, discount: 0, netAmount: 0 };
+    const newItem = { id: Date.now().toString(), itemId: "", itemCode: "", description: "", cartons: 0, gallons: 0, liters: 0, entryUnit: "cartons" as const, ratePerCtn: 0, grossAmount: 0, discPercent: 0, discount: 0, netAmount: 0 };
     setItems([...items, newItem]);
     setSelectedLineId(newItem.id);
   };
@@ -603,38 +622,37 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
   const updateItem = (id: string, field: keyof SIItem, value: any) => {
     setItems(items.map(i => {
       if (i.id === id) {
-        const updated = { ...i, [field]: value };
+        let updated = { ...i, [field]: value };
         if (field === "itemCode") {
           updated.itemId = "";
           updated.description = "";
         }
         const item = availableItems.find(ai => ai._id === (field === "itemId" ? value : i.itemId));
 
-        const isFilter = item && (
-          item.name?.toLowerCase().includes("filter") || 
-          item.name?.toLowerCase().includes("fliter") ||
-          updated.description?.toLowerCase().includes("filter") ||
-          updated.description?.toLowerCase().includes("fliter")
-        );
-        const gallonsInCtn = isFilter ? 1 : (item?.gallonsInCtn || 4);
-        const litersInCtn = isFilter ? 1 : (item?.litersInCtn || 16);
-
-        if (field === "cartons") {
-          updated.gallons = value * gallonsInCtn;
-          updated.liters = value * litersInCtn;
-        } else if (field === "gallons") {
-          updated.cartons = gallonsInCtn > 0 ? value / gallonsInCtn : 0;
-          updated.liters = gallonsInCtn > 0 ? (value / gallonsInCtn) * litersInCtn : 0;
-        } else if (field === "liters") {
-          updated.cartons = litersInCtn > 0 ? value / litersInCtn : 0;
-          updated.gallons = litersInCtn > 0 ? (value / litersInCtn) * gallonsInCtn : 0;
+        // Use dynamic conversion from item master
+        if (field === "cartons" || field === "gallons" || field === "liters") {
+          const catalogItem = resolveCatalogItem(availableItems, updated);
+          updated.entryUnit = field;
+          
+          // Apply unit conversion
+          updated = applyUnitFieldUpdate(updated, field, value, catalogItem);
         }
 
+        // Calculate gross amount: ALWAYS use Cartons × RatePerCtn
         if (field === "cartons" || field === "gallons" || field === "liters" || field === "ratePerCtn" || field === "discPercent" || field === "itemId") {
-          const qty = Number(updated.cartons) || 0;
-          updated.grossAmount = qty * (Number(updated.ratePerCtn) || 0);
-          updated.discount = (updated.grossAmount * (Number(updated.discPercent) || 0)) / 100;
-          updated.netAmount = updated.grossAmount - updated.discount;
+          const cartons = Number(updated.cartons) || 0;
+          const ratePerCtn = Number(updated.ratePerCtn) || 0;
+          const discPercent = Number(updated.discPercent) || 0;
+          
+          // Gross Amount = Cartons × Rate Per Carton
+          const grossAmount = cartons * ratePerCtn;
+          const discount = (grossAmount * discPercent) / 100;
+          const netAmount = grossAmount - discount;
+          
+          // Round ONLY the final monetary values to 2 decimal places
+          updated.grossAmount = Math.round(grossAmount * 100) / 100;
+          updated.discount = Math.round(discount * 100) / 100;
+          updated.netAmount = Math.round(netAmount * 100) / 100;
         }
 
         if (field === "itemId" && item) {
@@ -643,17 +661,20 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
           const baseRate = formData.isWholesale ? (item.wholesaleRate || item.rate || 0) : (item.retailRate || item.rate || 0);
           updated.ratePerCtn = formData.isOnCredit ? baseRate * 1.10 : baseRate;
           
-          updated.cartons = 1;
-          const isFilterNow = item.name?.toLowerCase().includes("filter") || item.name?.toLowerCase().includes("fliter");
-          const defaultGals = isFilterNow ? 1 : (item.gallonsInCtn || 4);
-          const defaultLtrs = isFilterNow ? 1 : (item.litersInCtn || 16);
-          updated.gallons = defaultGals;
-          updated.liters = defaultLtrs;
+          // Use dynamic conversion from item master for default units
+          updated = defaultUnitsForItem(updated, item);
+          updated.entryUnit = "cartons"; // Default entry unit when item is selected
 
+          // Calculate gross amount based on cartons (default entry unit)
           const qty = Number(updated.cartons) || 0;
           updated.grossAmount = qty * (Number(updated.ratePerCtn) || 0);
           updated.discount = (updated.grossAmount * (Number(updated.discPercent) || 0)) / 100;
           updated.netAmount = updated.grossAmount - updated.discount;
+          
+          // Round to 2 decimal places to avoid floating point precision errors
+          updated.grossAmount = Math.round(updated.grossAmount * 100) / 100;
+          updated.discount = Math.round(updated.discount * 100) / 100;
+          updated.netAmount = Math.round(updated.netAmount * 100) / 100;
         }
         return updated;
       }
@@ -1108,10 +1129,10 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
                         <td className="px-3 py-2 text-xs font-black text-right border-r font-mono bg-slate-50">
                           {(availableItems.find(ai => ai._id === line.itemId)?.purchaseRate || 0).toFixed(2)}
                         </td>
-                        <td className="p-0 border-r"><input type="number" value={line.cartons} onChange={e => updateItem(line.id, "cartons", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
-                        <td className="p-0 border-r"><input type="number" value={line.gallons} onChange={e => updateItem(line.id, "gallons", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
-                        <td className="p-0 border-r"><input type="number" value={line.liters} onChange={e => updateItem(line.id, "liters", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
-                        <td className="p-0 border-r"><input type="number" value={line.ratePerCtn} onChange={e => updateItem(line.id, "ratePerCtn", parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-xs font-black text-right outline-none bg-transparent" /></td>
+                        <td className="p-0 border-r"><input type="number" step="any" value={line.cartons} onChange={e => updateItem(line.id, "cartons", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
+                        <td className="p-0 border-r"><input type="number" step="any" value={line.gallons} onChange={e => updateItem(line.id, "gallons", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
+                        <td className="p-0 border-r"><input type="number" step="any" value={line.liters} onChange={e => updateItem(line.id, "liters", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
+                        <td className="p-0 border-r"><input type="number" step="any" value={line.ratePerCtn} onChange={e => updateItem(line.id, "ratePerCtn", parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-xs font-black text-right outline-none bg-transparent" /></td>
                         <td className="px-3 py-2 text-xs font-black text-right border-r font-mono">{line.grossAmount.toFixed(2)}</td>
                         <td className="p-0 border-r"><input type="number" value={line.discPercent} onChange={e => updateItem(line.id, "discPercent", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="px-3 py-2 text-xs font-black text-right border-r font-mono text-rose-600">{line.discount.toFixed(2)}</td>

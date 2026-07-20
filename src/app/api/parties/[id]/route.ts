@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import dbConnect from "@/lib/db";
 import Party from "@/models/Party";
-import { recalculatePartyBalance, getCustomerAdvanceStats } from "@/services/posting/invoicePostingHelper";
+import { recalculatePartyBalance, getCustomerAdvanceStats, adjustManualBalancesForClosing } from "@/services/posting/invoicePostingHelper";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
@@ -63,7 +63,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       }
     }
 
-    const row = await Party.findByIdAndUpdate(params.id, body, { new: true });
+    const adjustedBody = await adjustManualBalancesForClosing(params.id, body);
+    const row = await Party.findByIdAndUpdate(params.id, adjustedBody, { new: true });
     if (!row) return fail("Party not found", 404);
     
     // Automatically recalculate the balance using the updated openingBalance

@@ -6,9 +6,13 @@ import { Download, Printer, RotateCcw, ShoppingBag, RotateCcw as RotateLeft, Tre
 import { exportToExcel, printPage } from "@/lib/excel";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
+import { useMemo } from "react";
+
 export default function PurchaseSummaryReportPage() {
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [fromDate, setFromDate] = useState("2026-06-10");
+  const [toDate, setToDate] = useState("2026-07-16");
 
   useEffect(() => {
     async function fetchData() {
@@ -20,6 +24,7 @@ export default function PurchaseSummaryReportPage() {
           const transformed = json.data.map((p: any) => ({
             id: p._id,
             date: new Date(p.date).toLocaleDateString(),
+            rawDate: new Date(p.date),
             docNo: p.invoiceNo || p.docNo || "N/A",
             badge: p.type === 'purchase_return' ? 'PR' : p.type === 'purchase_order' ? 'PO' : 'PI',
             vendorInv: p.reference || "-",
@@ -46,18 +51,35 @@ export default function PurchaseSummaryReportPage() {
     fetchData();
   }, []);
 
-  const totalPurchases = data.filter(d => d.badge !== 'PR').reduce((acc, curr) => acc + curr.net, 0);
-  const totalReturns = data.filter(d => d.badge === 'PR').reduce((acc, curr) => acc + curr.net, 0);
-  const totalGst = data.reduce((acc, curr) => acc + curr.gst, 0);
-  const totalWht = data.reduce((acc, curr) => acc + curr.wht, 0);
+  const filteredData = useMemo(() => {
+    return data.filter(d => {
+      if (!d.rawDate) return true;
+      const dDate = new Date(d.rawDate);
+      if (fromDate) {
+        const start = new Date(fromDate);
+        if (dDate < start) return false;
+      }
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        if (dDate > end) return false;
+      }
+      return true;
+    });
+  }, [data, fromDate, toDate]);
+
+  const totalPurchases = filteredData.filter(d => d.badge !== 'PR').reduce((acc, curr) => acc + curr.net, 0);
+  const totalReturns = filteredData.filter(d => d.badge === 'PR').reduce((acc, curr) => acc + curr.net, 0);
+  const totalGst = filteredData.reduce((acc, curr) => acc + curr.gst, 0);
+  const totalWht = filteredData.reduce((acc, curr) => acc + curr.wht, 0);
 
   const stats = [
-    { title: "TOTAL PURCHASES", value: `Rs. ${totalPurchases.toLocaleString()}`, subtitle: `${data.filter(d => d.badge !== 'PR').length} invoices`, icon: ShoppingBag, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
-    { title: "TOTAL RETURNS", value: `Rs. ${totalReturns.toLocaleString()}`, subtitle: `${data.filter(d => d.badge === 'PR').length} returns`, icon: RotateLeft, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
+    { title: "TOTAL PURCHASES", value: `Rs. ${totalPurchases.toLocaleString()}`, subtitle: `${filteredData.filter(d => d.badge !== 'PR').length} invoices`, icon: ShoppingBag, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
+    { title: "TOTAL RETURNS", value: `Rs. ${totalReturns.toLocaleString()}`, subtitle: `${filteredData.filter(d => d.badge === 'PR').length} returns`, icon: RotateLeft, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
     { title: "NET PURCHASES", value: `Rs. ${(totalPurchases - totalReturns).toLocaleString()}`, subtitle: "PI - PR", icon: TrendingUp, iconColor: "text-emerald-600", iconBg: "bg-emerald-50", valueColor: "text-emerald-600" },
     { title: "TOTAL GST", value: `Rs. ${totalGst.toLocaleString()}`, subtitle: "Input tax", icon: Percent, iconColor: "text-blue-600", iconBg: "bg-blue-50" },
     { title: "TOTAL WHT DEDUCTED", value: `Rs. ${totalWht.toLocaleString()}`, subtitle: "Withholding tax", icon: Scissors, iconColor: "text-purple-600", iconBg: "bg-purple-50" },
-    { title: "AVG PURCHASE VALUE", value: `Rs. ${data.length > 0 ? (totalPurchases / data.length).toFixed(0) : 0}`, subtitle: "Per invoice", icon: Calculator, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
+    { title: "AVG PURCHASE VALUE", value: `Rs. ${filteredData.length > 0 ? (totalPurchases / filteredData.length).toFixed(0) : 0}`, subtitle: "Per invoice", icon: Calculator, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
   ];
 
   const Filters = (

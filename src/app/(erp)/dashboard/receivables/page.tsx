@@ -458,7 +458,7 @@ export default function ReceivablesPage() {
                           {row.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3.5 text-right">PKR {fmt(row.opening)}</td>
+                      <td className="px-4 py-3.5 text-right">PKR {fmt(Math.abs(row.opening))}</td>
                       <td className="px-4 py-3.5 text-right text-emerald-600">+PKR {fmt(row.sales)}</td>
                       <td className="px-4 py-3.5 text-right text-rose-600">-PKR {fmt(row.receipts)}</td>
                       <td className="px-4 py-3.5 text-right font-black text-slate-900 dark:text-white">

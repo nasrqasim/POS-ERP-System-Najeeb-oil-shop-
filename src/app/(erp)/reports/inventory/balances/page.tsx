@@ -4,11 +4,12 @@ import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Box, DollarSign, ArrowUpRight, ArrowDownRight, LayoutGrid, Search, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect, useMemo } from "react";
-import { lineStockQty } from "@/lib/itemUnits";
+import { lineStockQty, stockToDisplayUnits } from "@/lib/itemUnits";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function InventoryBalancesReportPage() {
   const [data, setData] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(true);
@@ -22,6 +23,20 @@ export default function InventoryBalancesReportPage() {
         String(r.name || "").toLowerCase().includes(q)
     );
   }, [data, searchQuery]);
+
+  useEffect(() => {
+    // Fetch items for conversion values
+    const fetchItems = async () => {
+      try {
+        const res = await fetch('/api/items');
+        const json = await res.json();
+        if (json.ok) setItems(json.data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchItems();
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -202,29 +217,43 @@ export default function InventoryBalancesReportPage() {
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Code</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Name</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Category</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Opening</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest text-right">Qty In</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-rose-600 uppercase tracking-widest text-right">Qty Out</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-blue-600 uppercase tracking-widest text-right">Closing</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Opening (C/G/L)</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest text-right">Qty In (C/G/L)</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-rose-600 uppercase tracking-widest text-right">Qty Out (C/G/L)</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-blue-600 uppercase tracking-widest text-right">Closing (C/G/L)</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Rate</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest text-right">Closing Value</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredData.map((row: any, i: number) => (
-                      <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">{i + 1}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50/50">{row.code}</td>
-                        <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.name}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.category}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.opening.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-emerald-700 text-right">{row.in.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-rose-700 text-right">{row.out.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-blue-700 text-right bg-blue-50/30">{row.closing.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.rate.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-slate-800 dark:text-slate-100 text-right">{row.value.toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {filteredData.map((row: any, i: number) => {
+                      // Get item conversion values
+                      const item = items.find((it: any) => it._id === row.id);
+                      const conversionItem = item || { gallonsInCtn: 4, litersInCtn: 16 };
+                      
+                      const openingDisplay = stockToDisplayUnits(row.opening, conversionItem);
+                      const inDisplay = stockToDisplayUnits(row.in, conversionItem);
+                      const outDisplay = stockToDisplayUnits(row.out, conversionItem);
+                      const closingDisplay = stockToDisplayUnits(row.closing, conversionItem);
+                      
+                      const formatQty = (c: number, g: number, l: number) => 
+                        `${c.toFixed(2)} / ${g.toFixed(2)} / ${l.toFixed(2)}`;
+                      
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">{i + 1}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50/50">{row.code}</td>
+                          <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.name}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">{row.category}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{formatQty(openingDisplay.cartons, openingDisplay.gallons, openingDisplay.liters)}</td>
+                          <td className="px-4 py-3 text-[11px] font-black text-emerald-700 text-right">{formatQty(inDisplay.cartons, inDisplay.gallons, inDisplay.liters)}</td>
+                          <td className="px-4 py-3 text-[11px] font-black text-rose-700 text-right">{formatQty(outDisplay.cartons, outDisplay.gallons, outDisplay.liters)}</td>
+                          <td className="px-4 py-3 text-[11px] font-black text-blue-700 text-right bg-blue-50/30">{formatQty(closingDisplay.cartons, closingDisplay.gallons, closingDisplay.liters)}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.rate.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-[11px] font-black text-slate-800 dark:text-slate-100 text-right">{row.value.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
                     <tr className="bg-slate-50 dark:bg-slate-800/50 font-black">
                       <td colSpan={4} className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-slate-800 dark:text-slate-100">Grand Total</td>
                       <td className="px-4 py-3 text-[11px] text-right">{filteredData.reduce((s, r) => s + r.opening, 0).toLocaleString()}</td>

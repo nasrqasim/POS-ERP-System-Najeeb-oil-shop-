@@ -4,6 +4,7 @@ import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Box, AlertTriangle, XCircle, AlertCircle, Search, RefreshCcw, ShoppingCart, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
+import { stockToDisplayUnits } from "@/lib/itemUnits";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function LowStockAlertReportPage() {
@@ -285,7 +286,7 @@ export default function LowStockAlertReportPage() {
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Code</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Item Name</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Location</th>
-                      <th className="px-4 py-3 text-[9px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest text-right">Current Stock</th>
+                      <th className="px-4 py-3 text-[9px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest text-right">Current Stock (C/G/L)</th>
                       <th className="px-4 py-3 text-[9px] font-black text-amber-600 uppercase tracking-widest text-right">Reorder Level</th>
                       <th className="px-4 py-3 text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Safety Stock</th>
                       <th className="px-4 py-3 text-[9px] font-black text-rose-600 uppercase tracking-widest text-right">Gap</th>
@@ -293,27 +294,35 @@ export default function LowStockAlertReportPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {lowStockItems.map((row, i) => (
-                      <tr key={row._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">{i + 1}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50/50">{row.code}</td>
-                        <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.name}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">Warehouse-1</td>
-                        <td className={`px-4 py-3 text-[11px] font-black text-right ${row.stock === 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100'}`}>{row.stock}</td>
-                        <td className="px-4 py-3 text-[11px] font-black text-amber-600 text-right bg-amber-50/30">{row.reorder}</td>
-                        <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.safety}</td>
-                        <td className={`px-4 py-3 text-[11px] font-black text-right bg-rose-50/30 ${row.gap < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{row.gap}</td>
-                        <td className="px-4 py-3 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                                row.status === 'Out of Stock' ? 'bg-rose-100 text-rose-700' : 
-                                row.status === 'Critical' ? 'bg-orange-100 text-orange-700' : 
-                                row.status === 'Warning' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                                {row.status}
-                            </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {lowStockItems.map((row, i) => {
+                      const stockDisplay = stockToDisplayUnits(row.stock, row);
+                      const formatQty = (c: number, g: number, l: number) => 
+                        `${c.toFixed(2)} / ${g.toFixed(2)} / ${l.toFixed(2)}`;
+                      
+                      return (
+                        <tr key={row._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50/50 transition-colors">
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">{i + 1}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50/50">{row.code}</td>
+                          <td className="px-4 py-3 text-[11px] font-bold text-maroon-800 cursor-pointer hover:underline">{row.name}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">Warehouse-1</td>
+                          <td className={`px-4 py-3 text-[11px] font-black text-right ${row.stock === 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100'}`}>
+                            {formatQty(stockDisplay.cartons, stockDisplay.gallons, stockDisplay.liters)}
+                          </td>
+                          <td className="px-4 py-3 text-[11px] font-black text-amber-600 text-right bg-amber-50/30">{row.reorder}</td>
+                          <td className="px-4 py-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{row.safety}</td>
+                          <td className={`px-4 py-3 text-[11px] font-black text-right bg-rose-50/30 ${row.gap < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{row.gap}</td>
+                          <td className="px-4 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                                  row.status === 'Out of Stock' ? 'bg-rose-100 text-rose-700' : 
+                                  row.status === 'Critical' ? 'bg-orange-100 text-orange-700' : 
+                                  row.status === 'Warning' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                  {row.status}
+                              </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

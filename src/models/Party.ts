@@ -21,6 +21,7 @@ export interface IParty extends mongoose.Document {
   creditLimit: number;
   creditDays?: number;
   openingBalance: number;
+  closingBalance?: number;
   debit: number;
   credit: number;
   manualDebit?: number;
@@ -58,6 +59,7 @@ const PartySchema = new Schema<IParty>(
     creditLimit: { type: Number, default: 0 },
     creditDays: { type: Number, default: 30 },
     openingBalance: { type: Number, default: 0 },
+    closingBalance: { type: Number, default: 0 },
     debit: { type: Number, default: 0 },
     credit: { type: Number, default: 0 },
     manualDebit: { type: Number, default: 0 },

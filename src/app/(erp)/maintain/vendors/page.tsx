@@ -448,8 +448,8 @@ export default function VendorsPage() {
                 <tr>
                   <td colSpan={3} className="px-6 py-4 text-right uppercase tracking-widest text-xs">Total PKR:</td>
                   <td className="px-6 py-4 text-sm">Rs.{filteredVendors.reduce((acc, v) => acc + (v.openingBalance || 0), 0).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm text-emerald-600">Rs.{filteredVendors.reduce((acc, v) => acc + (v.debit || 0), 0).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm text-rose-600">Rs.{filteredVendors.reduce((acc, v) => acc + (v.credit || 0), 0).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm text-rose-600">-Rs.{filteredVendors.reduce((acc, v) => acc + (v.debit || 0), 0).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm text-emerald-600">+Rs.{filteredVendors.reduce((acc, v) => acc + (v.credit || 0), 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-sm text-maroon-800 dark:text-maroon-400">Rs.{filteredVendors.reduce((acc, v) => acc + (v.balance || 0), 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-center">-</td>
                   <td className="px-6 py-4 print:hidden"></td>

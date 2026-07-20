@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api";
 import dbConnect from "@/lib/db";
 import Party from "@/models/Party";
-import { recalculatePartyBalance, getCustomerAdvanceStats } from "@/services/posting/invoicePostingHelper";
+import { recalculatePartyBalance, getCustomerAdvanceStats, adjustManualBalancesForClosing } from "@/services/posting/invoicePostingHelper";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
@@ -55,10 +55,11 @@ export async function POST(req: Request) {
     }
 
     await dbConnect();
-    if (body.openingBalance && (!body.balance || body.balance === 0)) {
-      body.balance = body.openingBalance;
+    const adjustedBody = await adjustManualBalancesForClosing(null, body);
+    if (adjustedBody.openingBalance && (!adjustedBody.balance || adjustedBody.balance === 0)) {
+      adjustedBody.balance = adjustedBody.openingBalance;
     }
-    const row = await Party.create(body);
+    const row = await Party.create(adjustedBody);
     await recalculatePartyBalance(String(row._id));
     const finalRow = await Party.findById(row._id).lean();
     return ok(finalRow || row, 201);

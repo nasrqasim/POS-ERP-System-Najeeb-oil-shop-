@@ -163,7 +163,8 @@ export default function CustomerProfileHistory({
 
   // Recalculates transactions ledger when date range is applied
   const getProcessedLedger = () => {
-    const initialOpening = currentCustomer.openingBalance || 0;
+    // Use absolute value of opening balance for display (receivables/payables should be positive)
+    const initialOpening = Math.abs(currentCustomer.openingBalance || 0);
     const startRange = filterByPeriod ? new Date(ledgerFromDate || "2000-01-01") : new Date("2000-01-01");
     const endRange = filterByPeriod ? new Date(ledgerToDate || "2100-01-01") : new Date("2100-01-01");
     if (filterByPeriod) {
@@ -171,27 +172,6 @@ export default function CustomerProfileHistory({
     }
 
     const txs: any[] = [];
-
-    if (currentCustomer.manualDebit) {
-      txs.push({
-        date: new Date("2000-01-01T00:00:00.000Z"),
-        voucherNo: "-",
-        type: "Adjustment",
-        remarks: "Opening Debit Adjustment",
-        debit: Number(currentCustomer.manualDebit) || 0,
-        credit: 0
-      });
-    }
-    if (currentCustomer.manualCredit) {
-      txs.push({
-        date: new Date("2000-01-01T00:00:00.000Z"),
-        voucherNo: "-",
-        type: "Adjustment",
-        remarks: "Opening Credit Adjustment",
-        debit: 0,
-        credit: Number(currentCustomer.manualCredit) || 0
-      });
-    }
 
     // Process Sales & Returns
     sales.forEach((s: any) => {

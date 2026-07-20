@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { formatReceiptLineQty } from "@/lib/itemUnits";
 
 interface BlackCopperS4CProps {
   data: any;
@@ -193,12 +194,18 @@ export default function BlackCopperS4C({
               
               const gross = qty * price;
               const disc = Math.max(0, gross - total);
+              
+              // Use formatReceiptLineQty to get converted quantity display
+              const qtyDisplay = formatReceiptLineQty(item, item);
 
               return (
                 <tr key={i} className="hover:bg-slate-50/50">
                   <td className="py-2.5 px-2 text-slate-400 font-medium">{i + 1}</td>
-                  <td className="py-2.5 px-2 text-slate-800 font-black">{desc}</td>
-                  <td className="py-2.5 px-2 text-center">{qty}</td>
+                  <td className="py-2.5 px-2 text-slate-800 font-black">
+                    {desc}
+                    <div className="text-[9px] text-slate-500 font-normal mt-0.5">{qtyDisplay.equivalentLabel || ""}</div>
+                  </td>
+                  <td className="py-2.5 px-2 text-center">{qtyDisplay.qtyLabel}</td>
                   <td className="py-2.5 px-2 text-right">PKR {price.toLocaleString()}</td>
                   <td className="py-2.5 px-2 text-right text-rose-600 font-medium">{disc > 0 ? `PKR ${disc.toLocaleString()}` : "-"}</td>
                   <td className="py-2.5 px-2 text-right text-slate-900 font-black">PKR {total.toLocaleString()}</td>

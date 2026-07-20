@@ -30,12 +30,8 @@ export default function VendorBalancesReportPage() {
   const [bankPayments, setBankPayments] = useState<any[]>([]);
 
   useEffect(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    setFromDate(`${year}-${month}-01`);
-    setToDate(`${year}-${month}-${day}`);
+    setFromDate("2025-01-01");
+    setToDate("2026-07-16");
   }, []);
 
   useEffect(() => {

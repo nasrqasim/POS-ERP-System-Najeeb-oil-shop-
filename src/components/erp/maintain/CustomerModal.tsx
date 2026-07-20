@@ -29,6 +29,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
     creditLimit: 0,
     creditDays: 30,
     openingBalance: 0,
+    closingBalance: 0,
     manualDebit: 0,
     manualCredit: 0,
     status: "Active",
@@ -36,6 +37,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
   });
 
   const [openingBalanceType, setOpeningBalanceType] = useState<"Credit" | "Debit">("Credit");
+  const [closingBalanceType, setClosingBalanceType] = useState<"Credit" | "Debit">("Debit");
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [shopProfile, setShopProfile] = useState<any>(null);
 
@@ -57,7 +59,9 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
   useEffect(() => {
     if (customer) {
       const op = customer.openingBalance || 0;
+      const cl = customer.balance || 0;
       setOpeningBalanceType(op > 0 ? "Debit" : "Credit");
+      setClosingBalanceType(cl >= 0 ? "Debit" : "Credit");
       setFormData({
         code: customer.code || "",
         name: customer.companyName || customer.name || "",
@@ -74,6 +78,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
         creditLimit: customer.creditLimit || 0,
         creditDays: customer.creditDays || 30,
         openingBalance: Math.abs(op),
+        closingBalance: Math.abs(cl),
         manualDebit: customer.manualDebit || customer.debit || 0,
         manualCredit: customer.manualCredit || customer.credit || 0,
         status: customer.status || "Active",
@@ -81,6 +86,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
       });
     } else {
       setOpeningBalanceType("Debit");
+      setClosingBalanceType("Debit");
       setFormData({
         code: "",
         name: "",
@@ -97,6 +103,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
         creditLimit: 0,
         creditDays: 30,
         openingBalance: 0,
+        closingBalance: 0,
         manualDebit: 0,
         manualCredit: 0,
         status: "Active",
@@ -109,9 +116,13 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
     e.preventDefault();
     if (onSave) {
       const finalOpeningBalance = openingBalanceType === "Debit" ? Math.abs(Number(formData.openingBalance)) : -Math.abs(Number(formData.openingBalance));
+      const finalClosingBalance = closingBalanceType === "Debit" ? Math.abs(Number(formData.closingBalance)) : -Math.abs(Number(formData.closingBalance));
       onSave({
         ...formData,
-        openingBalance: finalOpeningBalance
+        openingBalance: finalOpeningBalance,
+        closingBalance: finalClosingBalance,
+        manualDebit: Number(formData.manualDebit),
+        manualCredit: Number(formData.manualCredit)
       });
     }
     onClose();
@@ -367,7 +378,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
           </div>
         </div>
 
-        {/* Row 8: Opening Balance, Debit, Credit & Status */}
+        {/* Row 8: Opening Balance & Closing Balance */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -407,6 +418,48 @@ export default function CustomerModal({ isOpen, onClose, customer, onSave }: Cus
               </div>
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <Wallet size={14} className="text-maroon-800" /> Closing Balance
+            </label>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                value={formData.closingBalance}
+                onChange={(e) => setFormData({ ...formData, closingBalance: Number(e.target.value) })}
+                className="flex-1 min-w-0 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl text-sm font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-maroon-800/5 outline-none transition-all dark:text-white"
+                placeholder="0"
+              />
+              <div className="flex bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl shrink-0 w-36">
+                <button
+                  type="button"
+                  onClick={() => setClosingBalanceType("Credit")}
+                  className={`flex-1 py-1 text-[11px] font-black rounded-lg transition-all ${
+                    closingBalanceType === "Credit"
+                      ? "bg-white dark:bg-slate-900 text-maroon-850 dark:text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  }`}
+                >
+                  Credit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClosingBalanceType("Debit")}
+                  className={`flex-1 py-1 text-[11px] font-black rounded-lg transition-all ${
+                    closingBalanceType === "Debit"
+                      ? "bg-white dark:bg-slate-900 text-maroon-855 dark:text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  }`}
+                >
+                  Debit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 8b: Status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
               Status

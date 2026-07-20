@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import ERPModal from "../ui/ERPModal";
 import { Save, Package, Tag, Layers, Scale } from "lucide-react";
+import { validateItemPackSizes } from "@/lib/itemUnits";
 
 interface ItemModalProps {
   isOpen: boolean;
@@ -76,6 +77,14 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate conversion values
+    const validation = validateItemPackSizes(formData.gallonsInCtn, formData.litersInCtn);
+    if (!validation.ok) {
+      alert(validation.message);
+      return;
+    }
+    
     if (onSave) onSave(formData);
     onClose();
   };

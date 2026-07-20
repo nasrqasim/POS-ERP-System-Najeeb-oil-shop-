@@ -29,8 +29,9 @@ export default function InventoryLedgerReportPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const [displayUnit, setDisplayUnit] = useState<"cartons" | "gallons" | "litres">("cartons");
 
-  const unitMultiplier = displayUnit === "gallons" ? 4 : displayUnit === "litres" ? 16 : 1;
-  const unitLabel = displayUnit === "gallons" ? "Gallons" : displayUnit === "litres" ? "Litres" : "CTNs";
+  const selectedItemObj = items.find(i => i._id === selectedItemId);
+  const unitMultiplier = displayUnit === "gallons" ? (selectedItemObj?.gallonsInCtn || 4) : displayUnit === "litres" ? (selectedItemObj?.litersInCtn || 16) : 1;
+  const unitLabel = displayUnit === "gallons" ? "Gallons" : displayUnit === "litres" ? "Litres" : "Cartons";
   const unitShort = displayUnit === "gallons" ? "Gal" : displayUnit === "litres" ? "Ltr" : "CTN";
 
   const handleInvoiceClick = (refNo: string) => {
@@ -183,8 +184,6 @@ export default function InventoryLedgerReportPage() {
     return itemsWithOpening.reduce((sum, item) => sum + (item.stockQtyCartons || 0) * (item.retailRate || 0), 0);
   }, [itemsWithOpening]);
 
-  const selectedItemObj = items.find(i => i._id === selectedItemId);
-
   const stats = [
     { title: `Opening Balance (${unitShort})`, value: (summary.openingBalance * unitMultiplier).toLocaleString(), icon: Box, iconColor: "text-slate-600 dark:text-slate-300", iconBg: "bg-slate-50 dark:bg-slate-800/50" },
     { title: `Total In (${unitShort})`, value: (summary.totalIn * unitMultiplier).toLocaleString(), icon: ArrowUpRight, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
@@ -229,9 +228,9 @@ export default function InventoryLedgerReportPage() {
             onChange={(e) => setDisplayUnit(e.target.value as any)}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-maroon-800/20"
           >
-            <option value="cartons">Cartons (CTNs)</option>
-            <option value="gallons">Gallons (1 CTN = 4 Gal)</option>
-            <option value="litres">Litres (1 CTN = 16 Ltr)</option>
+            <option value="cartons">Cartons (CTN)</option>
+            <option value="gallons">Gallons</option>
+            <option value="litres">Litres</option>
           </select>
         </div>
       </div>
