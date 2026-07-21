@@ -32,8 +32,9 @@ export default function CustomerProfileHistory({
   // Data State
   const [sales, setSales] = useState<any[]>([]);
   const [receipts, setReceipts] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Ledger Dates State
   const [ledgerFromDate, setLedgerFromDate] = useState("");
   const [ledgerToDate, setLedgerToDate] = useState("");
@@ -84,21 +85,25 @@ export default function CustomerProfileHistory({
     }
   }, []);
 
-  // Fetch Sales and Receipts
+  // Fetch Sales, Receipts, and Payments
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [salesRes, cashRes, bankRes, partyRes] = await Promise.all([
+      const [salesRes, cashRes, bankRes, partyRes, cashPayRes, bankPayRes] = await Promise.all([
         fetch("/api/sales"),
         fetch("/api/cash-receipts"),
         fetch("/api/bank-receipts"),
-        fetch(`/api/parties/${customer._id}`)
+        fetch(`/api/parties/${customer._id}`),
+        fetch("/api/cash-payments"),
+        fetch("/api/bank-payments")
       ]);
-      const [salesJson, cashJson, bankJson, partyJson] = await Promise.all([
+      const [salesJson, cashJson, bankJson, partyJson, cashPayJson, bankPayJson] = await Promise.all([
         salesRes.json(),
         cashRes.json(),
         bankRes.json(),
-        partyRes.json()
+        partyRes.json(),
+        cashPayRes.json(),
+        bankPayRes.json()
       ]);
 
       if (partyJson.ok && partyJson.data) {
@@ -107,6 +112,7 @@ export default function CustomerProfileHistory({
 
       let customerSales: any[] = [];
       let customerReceipts: any[] = [];
+      let customerPayments: any[] = [];
 
       // 1. Process Sales & Returns
       if (salesJson.ok && salesJson.data) {
@@ -147,8 +153,39 @@ export default function CustomerProfileHistory({
         });
       }
 
+      // 4. Process Cash Payments to Customer (Refunds/Payments)
+      if (cashPayJson.ok && cashPayJson.data) {
+        cashPayJson.data.forEach((p: any) => {
+          const match = p.vendor === customer._id || p.vendor === customer.name || p.partyId?._id === customer._id;
+          if (match) {
+            customerPayments.push({
+              ...p,
+              method: "Cash",
+              reference: p.reference || p.voucherNo,
+              user: "Admin"
+            });
+          }
+        });
+      }
+
+      // 5. Process Bank Payments to Customer
+      if (bankPayJson.ok && bankPayJson.data) {
+        bankPayJson.data.forEach((p: any) => {
+          const match = p.vendor === customer._id || p.vendor === customer.name || p.partyId?._id === customer._id;
+          if (match) {
+            customerPayments.push({
+              ...p,
+              method: "Bank",
+              reference: p.instrumentNo || p.voucherNo,
+              user: "Admin"
+            });
+          }
+        });
+      }
+
       setSales(customerSales.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()));
       setReceipts(customerReceipts.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()));
+      setPayments(customerPayments.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()));
     } catch (e) {
       console.error("Error loading customer profile history details:", e);
     } finally {
@@ -195,6 +232,18 @@ export default function CustomerProfileHistory({
         remarks: r.remarks || `Payment received via ${r.method}`,
         debit: 0,
         credit: r.amount || 0
+      });
+    });
+
+    // Process Payments to Customer (Debit adjustments, e.g. refunds / cash payments)
+    payments.forEach((p: any) => {
+      txs.push({
+        date: new Date(p.date || p.createdAt),
+        voucherNo: p.voucherNo,
+        type: p.method === "Cash" ? "Cash Payment" : "Bank Payment",
+        remarks: p.narration || p.notes || `Payment made via ${p.method}`,
+        debit: p.amount || 0,
+        credit: 0
       });
     });
 

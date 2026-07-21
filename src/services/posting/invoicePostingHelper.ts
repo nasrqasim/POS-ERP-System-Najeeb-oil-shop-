@@ -495,7 +495,7 @@ export async function postCashReceiptJournalEntries(receipt: any) {
   const entries = [];
   const date = receipt.date ? new Date(receipt.date) : new Date();
   
-  let cashCode = "1111";
+  let cashCode = "00786";
   let cashTitle = "Cash Hand";
   if (receipt.cashAccountId) {
     const acc = await Account.findById(receipt.cashAccountId).lean();
@@ -626,7 +626,7 @@ export async function postCashPaymentJournalEntries(payment: any) {
   const entries = [];
   const date = payment.date ? new Date(payment.date) : new Date();
 
-  let cashCode = "1111";
+  let cashCode = "00786";
   let cashTitle = "Cash Hand";
   if (payment.cashAccountId) {
     const acc = await Account.findById(payment.cashAccountId).lean();
@@ -640,7 +640,7 @@ export async function postCashPaymentJournalEntries(payment: any) {
   const amount = Number(payment.amount) || 0;
   const remarks = payment.narration || payment.notes || "Cash Payment";
 
-  if (paymentType === "party" && payment.partyId) {
+  if (payment.partyId) {
     const party = await Party.findById(payment.partyId).lean() as any;
     const isCustomer = party ? party.type === "Customer" : false;
     const isAdvanceRefund = isCustomer && (payment.isRefund || payment.partyPaymentType === "Refund");
