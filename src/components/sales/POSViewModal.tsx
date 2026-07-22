@@ -189,70 +189,74 @@ export default function POSViewModal({ isOpen, onClose, sale }: POSViewModalProp
 
           {/* Logo / Company Title */}
           <div className="text-center mb-1">
-            <h2 className="text-lg font-black uppercase tracking-tight" style={{ fontSize: '14px' }}>
+            <h2 className="text-[16px] font-black uppercase tracking-tight text-black" style={{ fontSize: '16px', color: '#000000', fontWeight: 900 }}>
               {companyInfo?.companyName || "AL HADEED TRADERS"}
             </h2>
-            <p className="text-[11px] font-bold">Tel: {companyInfo?.phone || "03108444612"}</p>
+            <p className="text-[12px] font-black text-black" style={{ color: '#000000', fontWeight: 900 }}>Tel: {companyInfo?.phone || "03108444612"}</p>
           </div>
 
-          {/* Black Bar for Receipt Type */}
-          <div className="bg-black text-white text-center py-0.5 font-bold uppercase tracking-wider my-1 text-xs" style={{ fontSize: '11px' }}>
+          {/* Solid Filled Black Header Bar for Receipt Type */}
+          <div className="bg-black text-white text-center py-1 font-black uppercase tracking-wider my-1.5 text-[13px]" style={{ backgroundColor: '#000000', color: '#ffffff', fontWeight: 900 }}>
             Sale Receipt
           </div>
 
-          {/* Meta Info Grid */}
-          <div className="text-[11px] font-bold space-y-0.5 my-2 border-b border-black pb-2 text-left">
-            <div className="flex justify-between">
+          {/* Meta Info Section */}
+          <div className="text-[12px] font-black space-y-1 my-1.5 border-b-2 border-black pb-1.5 text-left text-black" style={{ color: '#000000', fontWeight: 900 }}>
+            <div className="flex justify-between items-center">
               <span>Receipt No.</span>
-              <span>{sale.invoiceNo || "6928"}</span>
+              <span className="text-[13px] font-black">{sale.invoiceNo || "8047"}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Date &nbsp;{new Date(sale.date).toLocaleDateString('en-GB')}</span>
               <span>Time &nbsp;{new Date(sale.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Sales Person:</span>
-              <span>-</span>
+            <div className="flex justify-between items-center">
+              <span>Operator Name:</span>
+              <span className="font-black">Administrator</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
+              <span>Sales Person:</span>
+              <span className="font-black">-</span>
+            </div>
+            <div className="flex justify-between items-center">
               <span>Customer Name:</span>
-              <span className="truncate max-w-[150px]">
+              <span className="font-black truncate max-w-[160px]">
                 {sale.partyId?.companyName || sale.partyId?.name || "Walk-in Customer"}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Payment Type:</span>
-              <span>{sale.paymentMethod || "Cash"}</span>
+              <span className="font-black uppercase">{sale.paymentMethod || "Cash"}</span>
             </div>
           </div>
 
           {/* Items Table Headers */}
-          <div className="border-b border-black pb-1 mb-1 text-[11px] font-bold">
-            <div className="grid grid-cols-12">
-              <span className="col-span-6 text-left">Description</span>
-              <span className="col-span-2 text-center">Qty</span>
-              <span className="col-span-2 text-right">Price/Ctn</span>
-              <span className="col-span-2 text-right">Total</span>
+          <div className="border-t-2 border-b-2 border-black py-1 my-1 text-[12px] font-black text-black" style={{ color: '#000000', fontWeight: 900 }}>
+            <div className="flex justify-between items-center">
+              <span className="w-[44%] text-left">Description</span>
+              <span className="w-[14%] text-center">Qty</span>
+              <span className="w-[21%] text-right">Price/Ctn</span>
+              <span className="w-[21%] text-right">Total</span>
             </div>
           </div>
 
           {/* Items List */}
-          <div className="space-y-2 mb-2 text-[11px] font-bold text-left">
+          <div className="space-y-1.5 mb-1.5 text-[12px] font-black text-left text-black" style={{ color: '#000000', fontWeight: 900 }}>
             {sale.lines?.map((line: any, i: number) => {
               const desc = line.description || line.itemId?.name || "Item";
               const qty = line.qty || line.cartons || 1;
               const price = Math.round(line.rate || line.ratePerCarton || 0);
               const total = Math.round(line.netAmount || 0);
               return (
-                <div key={i} className="border-b border-dashed border-slate-200 pb-1">
+                <div key={i} className="border-b border-dashed border-black pb-1 pt-0.5">
                   {/* Row 1: Item Name / Description */}
-                  <div className="text-left font-black">{desc}</div>
+                  <div className="text-left font-black text-[13px] text-black leading-snug break-words">{desc}</div>
                   {/* Row 2: Qty / Rate / Total aligned */}
-                  <div className="grid grid-cols-12 text-[10px] text-slate-700">
-                    <span className="col-span-6"></span>
-                    <span className="col-span-2 text-center">{qty}</span>
-                    <span className="col-span-2 text-right">{price.toLocaleString()}</span>
-                    <span className="col-span-2 text-right font-black text-black">{total.toLocaleString()}</span>
+                  <div className="flex justify-between items-center text-[12px] font-black text-black mt-0.5">
+                    <span className="w-[44%] text-left text-[11px] font-black text-black"></span>
+                    <span className="w-[14%] text-center font-black">{qty}</span>
+                    <span className="w-[21%] text-right font-black">{price.toLocaleString()}</span>
+                    <span className="w-[21%] text-right font-black">{total.toLocaleString()}</span>
                   </div>
                 </div>
               );
@@ -260,26 +264,28 @@ export default function POSViewModal({ isOpen, onClose, sale }: POSViewModalProp
           </div>
 
           {/* Item & Qty Summary Row */}
-          <div className="border-t border-b border-black py-1 my-1 text-[11px] font-bold flex justify-between">
+          <div className="border-t-2 border-b-2 border-black py-1 my-1.5 text-[12px] font-black flex justify-between text-black" style={{ color: '#000000', fontWeight: 900 }}>
             <span>Item(s) &nbsp;{sale.lines?.length || 0}</span>
             <span>Total Qty &nbsp;{totalQty.toFixed(2)}</span>
           </div>
 
           {/* Financial Summary */}
-          <div className="space-y-1 text-[11px] font-bold my-2 text-right">
+          <div className="space-y-1 text-[12px] font-black my-1.5 text-right text-black" style={{ color: '#000000', fontWeight: 900 }}>
             <div className="flex justify-between">
               <span>Gross Total</span>
               <span>{Math.round(sale.subTotal || sale.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Discount</span>
-              <span>{Math.round(sale.discountAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div className="flex justify-between text-xs font-black pt-1 border-t border-black uppercase">
+            {Math.round(sale.discountAmount || 0) > 0 && (
+              <div className="flex justify-between">
+                <span>Discount</span>
+                <span>-{Math.round(sale.discountAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-[14px] font-black pt-1.5 pb-1 border-t-2 border-b-2 border-black uppercase my-1" style={{ fontSize: '14px', color: '#000000', fontWeight: 900 }}>
               <span>Net Total PKR</span>
               <span>{Math.round(sale.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            <div className="flex justify-between pt-1">
+            <div className="flex justify-between pt-0.5">
               <span>Amount Received</span>
               <span>{Math.round(sale.amountReceived || sale.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
@@ -287,16 +293,21 @@ export default function POSViewModal({ isOpen, onClose, sale }: POSViewModalProp
               <span>Cash Back PKR</span>
               <span>{Math.round((sale.amountReceived || sale.totalAmount || 0) - (sale.totalAmount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
+            {Math.round(sale.discountAmount || 0) > 0 && (
+              <div className="text-center font-black text-[12px] pt-1 uppercase">
+                You Saved Rs.{Math.round(sale.discountAmount || 0).toLocaleString()}
+              </div>
+            )}
           </div>
 
           {/* Visit Note */}
-          <div className="text-center font-black my-3 text-[11px]">
+          <div className="text-center font-black my-2.5 text-[12px] uppercase text-black" style={{ color: '#000000', fontWeight: 900 }}>
             *Thanks For Your Visit*
           </div>
 
           {/* Software By Footer */}
-          <div className="text-center text-[10px] font-bold border-t border-black pt-2 mt-2">
-            Software By: Roonjha Developers : 03152914836
+          <div className="text-center text-[10px] font-black border-t-2 border-black pt-1.5 mt-2 text-black" style={{ color: '#000000', fontWeight: 900 }}>
+            Software By: Switcher Techno- 0324-2419744
           </div>
         </div>,
         document.body

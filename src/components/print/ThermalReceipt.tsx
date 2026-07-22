@@ -18,7 +18,7 @@ function formatQty(val: any): string {
   const num = Number(val);
   if (isNaN(num)) return String(val);
   if (Number.isInteger(num)) return num.toString();
-  return parseFloat(num.toFixed(4)).toString();
+  return parseFloat(num.toFixed(2)).toString();
 }
 
 export default function ThermalReceipt({
@@ -59,113 +59,135 @@ export default function ThermalReceipt({
     ? companyInfo.phone
     : "03108444612";
 
+  const receiptNo = data.invoiceNo || data.poNumber || data.referenceNo || data.receiptNo || data.voucherNo || "8047";
+  const operatorName = data.operatorName || data.salesPerson || companyInfo?.userName || "Administrator";
+  const salesPerson = data.salesPerson || "-";
+  const paymentMethod = data.paymentMethod || data.paymentMode || "Cash";
+
   return (
-    <div className="thermal-receipt-container text-black bg-white p-2 font-mono text-[13px] font-black leading-tight w-[80mm] max-w-full mx-auto" style={{ color: '#000000' }}>
+    <div 
+      className="thermal-receipt-container text-black bg-white p-1 font-mono text-[12px] font-black leading-tight w-[76mm] max-w-[76mm] mx-auto" 
+      style={{ color: '#000000', fontFamily: 'Courier New, Courier, monospace, sans-serif', fontWeight: 900 }}
+    >
       {/* Logo */}
-      {config.showLogo && companyInfo?.logo && (
-        <div className="flex justify-center mb-2">
+      {config?.showLogo && companyInfo?.logo && (
+        <div className="flex justify-center mb-1">
           <Image 
             src={companyInfo.logo} 
             alt="Company Logo" 
-            width={100}
-            height={40}
+            width={120}
+            height={50}
             unoptimized
-            className="h-10 w-auto object-contain grayscale" 
+            className="h-12 w-auto object-contain grayscale" 
           />
         </div>
       )}
 
       {/* Company Title */}
       <div className="text-center mb-1">
-        <h2 className="font-black uppercase tracking-tight" style={{ fontSize: '16px', lineHeight: '1.2', color: '#000000' }}>
+        <h2 className="font-black uppercase tracking-tight text-[16px] text-black mb-0.5" style={{ color: '#000000', fontWeight: 900, fontSize: '16px' }}>
           {companyInfo?.companyName || "AL HADEED TRADERS"}
         </h2>
         {companyInfo?.address && (
-          <p className="text-[11px] font-black leading-tight mb-0.5" style={{ color: '#000000' }}>{companyInfo.address}</p>
+          <p className="text-[11px] font-black leading-tight mb-0.5 text-black" style={{ color: '#000000', fontWeight: 900 }}>{companyInfo.address}</p>
         )}
-        <p className="text-[12px] font-black text-black">Tel: {phoneNo}</p>
+        <p className="text-[12px] font-black text-black" style={{ color: '#000000', fontWeight: 900 }}>Tel: {phoneNo}</p>
       </div>
 
-      {/* High-Contrast Bordered Header for Receipt Type */}
-      <div className="border-t-2 border-b-2 border-black text-black text-center py-1 font-black uppercase tracking-wider my-2 text-[13px]">
+      {/* Solid Filled Black Header Bar for Receipt Type (Matches Image 2) */}
+      <div 
+        className="bg-black text-white text-center py-1 font-black uppercase tracking-wider my-1.5 text-[13px]" 
+        style={{ backgroundColor: '#000000', color: '#ffffff', fontWeight: 900 }}
+      >
         {data.receiptType || "Sale Receipt"}
       </div>
 
-      {/* Structured Meta Info Section */}
-      <div className="text-[12px] text-black my-2 border-b-2 border-black pb-2 space-y-2">
-        <div className="flex justify-between items-center text-[13px] border-b border-dashed border-black pb-1.5">
-          <span className="font-bold">Receipt No:</span>
-          <span className="text-[14px] font-black">{data.invoiceNo || data.poNumber || data.referenceNo || data.receiptNo || data.voucherNo || "6928"}</span>
+      {/* Structured Meta Info Section (Clean flex rows, no truncation) */}
+      <div className="text-[12px] text-black font-black my-1.5 border-b-2 border-black pb-1.5 space-y-1 text-left" style={{ color: '#000000', fontWeight: 900 }}>
+        <div className="flex justify-between items-center">
+          <span className="font-black">Receipt No.</span>
+          <span className="text-[13px] font-black">{receiptNo}</span>
         </div>
-        
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Date</span>
-            <span className="font-black">{dateStr}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Time</span>
-            <span className="font-black">{timeStr}</span>
-          </div>
-          
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Customer</span>
-            <span className="font-black break-words block max-w-[120px]">{customerName}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Cashier</span>
-            <span className="font-black">{data.operatorName || data.salesPerson || companyInfo?.userName || "Admin"}</span>
-          </div>
+        <div className="flex justify-between items-center">
+          <span>Date &nbsp;<strong className="font-black">{dateStr}</strong></span>
+          <span>Time &nbsp;<strong className="font-black">{timeStr}</strong></span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Operator Name:</span>
+          <span className="font-black">{operatorName}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Sales Person:</span>
+          <span className="font-black">{salesPerson}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Customer Name:</span>
+          <span className="font-black truncate max-w-[160px]">{customerName}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span>Payment Type:</span>
+          <span className="font-black uppercase">{paymentMethod}</span>
+        </div>
 
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Payment</span>
-            <span className="font-black uppercase">{data.paymentMethod || data.paymentMode || "Cash"}</span>
+        {/* Optional Vehicle & KM details if present */}
+        {(data.regNo || (data.startKms !== undefined && data.startKms !== null && data.startKms !== 0)) && (
+          <div className="pt-1 mt-1 border-t border-dashed border-black space-y-0.5">
+            {data.regNo && (
+              <div className="flex justify-between items-center">
+                <span>Vehicle No:</span>
+                <span className="font-black uppercase">{data.regNo}</span>
+              </div>
+            )}
+            {data.startKms !== undefined && data.startKms !== null && data.startKms !== 0 && (
+              <div className="flex justify-between items-center">
+                <span>Start / End KM:</span>
+                <span className="font-black">{data.startKms} / {data.endKms || 0}</span>
+              </div>
+            )}
           </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Vehicle No</span>
-            <span className="font-black uppercase">{data.regNo || "-"}</span>
-          </div>
+        )}
+      </div>
 
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-tight block">Start KM</span>
-            <span className="font-black">{data.startKms !== undefined && data.startKms !== null ? data.startKms : "-"}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-tight block">End KM</span>
-            <span className="font-black">{data.endKms !== undefined && data.endKms !== null ? data.endKms : "-"}</span>
-          </div>
+      {/* Items Table Headers (Matches Image 2: Description | Qty | Price/Ctn | Total) */}
+      <div className="border-t-2 border-b-2 border-black py-1 my-1 text-[12px] font-black text-black" style={{ color: '#000000', fontWeight: 900 }}>
+        <div className="flex justify-between items-center">
+          <span className="w-[44%] text-left">Description</span>
+          <span className="w-[14%] text-center">Qty</span>
+          <span className="w-[21%] text-right">Price/Ctn</span>
+          <span className="w-[21%] text-right">Total</span>
         </div>
       </div>
 
-      {/* Items Table Headers */}
-      <div className="border-b-2 border-black pb-1 mb-1 text-[12px] font-black text-black">
-        <div className="grid grid-cols-12">
-          <span className="col-span-6 text-left">Description</span>
-          <span className="col-span-2 text-center">Qty</span>
-          <span className="col-span-2 text-right">Price</span>
-          <span className="col-span-2 text-right">Total</span>
-        </div>
-      </div>
-
-      {/* Items List */}
-      <div className="space-y-2 mb-2 text-[12px] font-black text-black">
+      {/* Items List (Item name on top line, numbers cleanly aligned on line 2) */}
+      <div className="space-y-1.5 mb-1.5 text-[12px] font-black text-black" style={{ color: '#000000', fontWeight: 900 }}>
         {items.map((item: any, i: number) => {
           const desc = item.description || item.itemName || item.accountName || "Item";
           const qty = item.qty || item.cartons || 1;
           const price = Math.round(item.unitPrice || item.rate || item.amount || 0);
           const total = Math.round(item.total || item.amount || item.netAmount || item.grossAmount || 0);
           
-          // Use formatReceiptLineQty to get converted quantity display
           const qtyDisplay = formatReceiptLineQty(item, item);
           
           return (
-            <div key={i} className="border-b border-dashed border-black pb-1.5">
-              <div className="text-left font-black text-[12px] text-black leading-snug">{desc}</div>
-              <div className="grid grid-cols-12 text-[12px] text-black font-black mt-0.5">
-                <span className="col-span-6 text-[10px] text-slate-600">{qtyDisplay.equivalentLabel || ""}</span>
-                <span className="col-span-2 text-center">{qtyDisplay.qtyLabel}</span>
-                <span className="col-span-2 text-right">{price.toLocaleString()}</span>
-                <span className="col-span-2 text-right font-black">{total.toLocaleString()}</span>
+            <div key={i} className="border-b border-dashed border-black pb-1 pt-0.5">
+              {/* Top row: Full Item Name */}
+              <div className="text-left font-black text-[13px] text-black leading-snug break-words">
+                {desc}
+              </div>
+              {/* Bottom row: Unit details + Qty + Price/Ctn + Total */}
+              <div className="flex justify-between items-center text-[12px] text-black font-black mt-0.5">
+                <span className="w-[44%] text-left text-[11px] font-black text-black truncate">
+                  {qtyDisplay.equivalentLabel || ""}
+                </span>
+                <span className="w-[14%] text-center font-black">
+                  {qtyDisplay.qtyLabel || qty}
+                </span>
+                <span className="w-[21%] text-right font-black">
+                  {price.toLocaleString()}
+                </span>
+                <span className="w-[21%] text-right font-black">
+                  {total.toLocaleString()}
+                </span>
               </div>
             </div>
           );
@@ -176,13 +198,13 @@ export default function ThermalReceipt({
       </div>
 
       {/* Item & Qty Summary Row */}
-      <div className="border-t-2 border-b-2 border-black py-1.5 my-2 text-[12px] font-black text-black flex justify-between">
-        <span>Item(s): {itemCount}</span>
-        <span>Total Qty: {formatQty(totalQty)}</span>
+      <div className="border-t-2 border-b-2 border-black py-1 my-1.5 text-[12px] font-black text-black flex justify-between" style={{ color: '#000000', fontWeight: 900 }}>
+        <span>Item(s) &nbsp;{itemCount}</span>
+        <span>Total Qty &nbsp;{formatQty(totalQty)}</span>
       </div>
 
       {/* Financial Summary */}
-      <div className="space-y-1.5 text-[12px] font-black text-black my-2 text-right">
+      <div className="space-y-1 text-[12px] font-black text-black my-1.5 text-right" style={{ color: '#000000', fontWeight: 900 }}>
         <div className="flex justify-between">
           <span>Gross Total</span>
           <span>{grossTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -207,15 +229,15 @@ export default function ThermalReceipt({
         )}
         {discount > 0 && (
           <div className="flex justify-between">
-            <span>Additional Discount</span>
+            <span>Discount</span>
             <span>-{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>
         )}
-        <div className="flex justify-between text-[14px] font-black pt-2 pb-1 border-t-2 border-b-2 border-black uppercase my-1" style={{ fontSize: '14px' }}>
+        <div className="flex justify-between text-[14px] font-black pt-1.5 pb-1 border-t-2 border-b-2 border-black uppercase my-1" style={{ fontSize: '14px', color: '#000000', fontWeight: 900 }}>
           <span>Net Total PKR</span>
           <span>{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
         </div>
-        <div className="flex justify-between pt-1">
+        <div className="flex justify-between pt-0.5">
           <span>Amount Received</span>
           <span>{amountReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
         </div>
@@ -223,16 +245,21 @@ export default function ThermalReceipt({
           <span>Cash Back PKR</span>
           <span>{cashBack >= 0 ? cashBack.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "0.00"}</span>
         </div>
+        {discount > 0 && (
+          <div className="text-center font-black text-[12px] pt-1 uppercase">
+            You Saved Rs.{discount.toLocaleString()}
+          </div>
+        )}
       </div>
 
       {/* Visit Note */}
-      <div className="text-center font-black my-3 text-[12px] uppercase text-black">
-        * Thanks For Your Visit *
+      <div className="text-center font-black my-2.5 text-[12px] uppercase text-black" style={{ color: '#000000', fontWeight: 900 }}>
+        *Thanks For Your Visit*
       </div>
 
       {/* Software By Footer */}
-      <div className="text-center text-[10px] font-black text-black border-t-2 border-black pt-1.5 mt-2">
-        Software By: Roonjha Developers : 03152914836
+      <div className="text-center text-[10px] font-black text-black border-t-2 border-black pt-1.5 mt-2" style={{ color: '#000000', fontWeight: 900 }}>
+        Software By: Switcher Techno- 0324-2419744
       </div>
     </div>
   );
