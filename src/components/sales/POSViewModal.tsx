@@ -307,7 +307,7 @@ export default function POSViewModal({ isOpen, onClose, sale }: POSViewModalProp
 
           {/* Software By Footer */}
           <div className="text-center text-[10px] font-black border-t-2 border-black pt-1.5 mt-2 text-black" style={{ color: '#000000', fontWeight: 900 }}>
-            Software By: Switcher Techno- 0324-2419744
+            Software By: Roonjha developers : 03152914836
           </div>
         </div>,
         document.body
