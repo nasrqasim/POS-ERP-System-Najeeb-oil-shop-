@@ -107,6 +107,17 @@ export function normalizeInvoicePayload(body: Record<string, unknown>) {
     totalAmount: body.totalAmount != null ? Number(body.totalAmount) : undefined,
     notes: body.notes != null ? String(body.notes) : "",
     status: body.status != null ? String(body.status) : "posted",
+    
+    // Oil Shop Vehicle & Service fields
+    regNo: body.regNo != null ? String(body.regNo) : body.vehicleNo != null ? String(body.vehicleNo) : "",
+    vehicleNo: body.vehicleNo != null ? String(body.vehicleNo) : body.regNo != null ? String(body.regNo) : "",
+    startKms: body.startKms != null ? Number(body.startKms) : 0,
+    endKms: body.endKms != null ? Number(body.endKms) : 0,
+    rangeKms: body.rangeKms != null ? Number(body.rangeKms) : 0,
+    oilGaugeLimit: body.oilGaugeLimit != null ? Number(body.oilGaugeLimit) : 0,
+    carService: body.carService != null ? Number(body.carService) : 0,
+    carServiceDiscount: body.carServiceDiscount != null ? Number(body.carServiceDiscount) : 0,
+
     lines,
   };
 

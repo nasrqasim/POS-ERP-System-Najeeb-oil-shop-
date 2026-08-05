@@ -263,6 +263,49 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
   // Track currently edited invoice ID
   const [currentInvoiceId, setCurrentInvoiceId] = useState(initialData?._id || "");
 
+  // Sync initialData into formData when editing
+  useEffect(() => {
+    if (initialData) {
+      setCurrentInvoiceId(initialData._id || "");
+      setFormData(prev => ({
+        ...prev,
+        serialNo: initialData.invoiceNo || prev.serialNo,
+        date: initialData.date ? new Date(initialData.date).toISOString().split("T")[0] : prev.date,
+        invoiceType: initialData.invoiceType || prev.invoiceType,
+        vehicleNo: initialData.regNo || initialData.vehicleNo || prev.vehicleNo,
+        rangeKms: initialData.rangeKms !== undefined ? initialData.rangeKms : prev.rangeKms,
+        termsOfPayment: initialData.paymentTerms || prev.termsOfPayment,
+        incomeAccountId: initialData.incomeAccountId || prev.incomeAccountId,
+        isCancelled: initialData.isCancelled !== undefined ? initialData.isCancelled : prev.isCancelled,
+        isWholesale: initialData.isWholesale !== undefined ? initialData.isWholesale : prev.isWholesale,
+        isRetail: initialData.isRetail !== undefined ? initialData.isRetail : prev.isRetail,
+        isOnCredit: initialData.isCreditBill !== undefined ? initialData.isCreditBill : prev.isOnCredit,
+        startKms: initialData.startKms !== undefined ? initialData.startKms : prev.startKms,
+        endKms: initialData.endKms !== undefined ? initialData.endKms : prev.endKms,
+        oilGaugeLimit: initialData.oilGaugeLimit !== undefined ? initialData.oilGaugeLimit : prev.oilGaugeLimit,
+        status: initialData.status || prev.status,
+        customerId: initialData.partyId?._id || initialData.partyId || prev.customerId,
+        customerCode: initialData.partyId?.code || prev.customerCode,
+        customerName: initialData.partyId?.name || prev.customerName,
+        customerAddress: initialData.partyId?.address || prev.customerAddress,
+        customerTelephone: initialData.partyId?.phone || prev.customerTelephone,
+        customerBalance: initialData.partyId?.balance || prev.customerBalance,
+        customerCreditLimit: initialData.partyId?.creditLimit || prev.customerCreditLimit,
+        locationId: initialData.locationId?._id || initialData.locationId || prev.locationId,
+        jobNo: initialData.jobId?.code || prev.jobNo,
+        employeeRef: initialData.employeeId?._id || initialData.employeeId || prev.employeeRef,
+        remarks: initialData.notes || prev.remarks,
+        additionalDiscount: initialData.discountAmount !== undefined ? initialData.discountAmount : prev.additionalDiscount,
+        carService: initialData.carService !== undefined ? initialData.carService : prev.carService,
+        carServiceDiscount: initialData.carServiceDiscount !== undefined ? initialData.carServiceDiscount : prev.carServiceDiscount,
+        amountReceived: initialData.amountReceived !== undefined ? initialData.amountReceived : prev.amountReceived,
+        useAdvance: initialData.useAdvance !== undefined ? initialData.useAdvance : prev.useAdvance,
+        advanceAmountUsed: initialData.advanceAmountUsed !== undefined ? initialData.advanceAmountUsed : prev.advanceAmountUsed,
+        customerAdvanceStats: initialData.partyId?.advanceStats || prev.customerAdvanceStats
+      }));
+    }
+  }, [initialData]);
+
   // Debounced search for customers when user types
   useEffect(() => {
     if (!showCustomerSearch) return;
@@ -649,10 +692,10 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
           const discount = (grossAmount * discPercent) / 100;
           const netAmount = grossAmount - discount;
           
-          // Round ONLY the final monetary values to 2 decimal places
-          updated.grossAmount = Math.round(grossAmount * 100) / 100;
-          updated.discount = Math.round(discount * 100) / 100;
-          updated.netAmount = Math.round(netAmount * 100) / 100;
+          // Round monetary values to clean integers to eliminate .99 floating point precision errors
+          updated.grossAmount = Math.round(grossAmount);
+          updated.discount = Math.round(discount);
+          updated.netAmount = Math.round(netAmount);
         }
 
         if (field === "itemId" && item) {
@@ -667,14 +710,14 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
 
           // Calculate gross amount based on cartons (default entry unit)
           const qty = Number(updated.cartons) || 0;
-          updated.grossAmount = qty * (Number(updated.ratePerCtn) || 0);
-          updated.discount = (updated.grossAmount * (Number(updated.discPercent) || 0)) / 100;
-          updated.netAmount = updated.grossAmount - updated.discount;
+          const grossAmt = qty * (Number(updated.ratePerCtn) || 0);
+          const disc = (grossAmt * (Number(updated.discPercent) || 0)) / 100;
+          const net = grossAmt - disc;
           
-          // Round to 2 decimal places to avoid floating point precision errors
-          updated.grossAmount = Math.round(updated.grossAmount * 100) / 100;
-          updated.discount = Math.round(updated.discount * 100) / 100;
-          updated.netAmount = Math.round(updated.netAmount * 100) / 100;
+          // Round monetary values to clean integers to avoid floating point precision errors
+          updated.grossAmount = Math.round(grossAmt);
+          updated.discount = Math.round(disc);
+          updated.netAmount = Math.round(net);
         }
         return updated;
       }
@@ -714,6 +757,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
       date: formData.date || new Date().toISOString(),
       partyId: formData.customerId || null,
       regNo: formData.vehicleNo,
+      vehicleNo: formData.vehicleNo,
       rangeKms: formData.rangeKms,
       paymentTerms: formData.termsOfPayment,
       isCreditBill: formData.isOnCredit,
@@ -1127,16 +1171,16 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
                         </td>
                         <td className="px-3 py-2 text-xs font-medium border-r">{line.description}</td>
                         <td className="px-3 py-2 text-xs font-black text-right border-r font-mono bg-slate-50">
-                          {(availableItems.find(ai => ai._id === line.itemId)?.purchaseRate || 0).toFixed(2)}
+                          {Math.round(availableItems.find(ai => ai._id === line.itemId)?.purchaseRate || 0).toLocaleString()}
                         </td>
                         <td className="p-0 border-r"><input type="number" step="any" value={line.cartons} onChange={e => updateItem(line.id, "cartons", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" step="any" value={line.gallons} onChange={e => updateItem(line.id, "gallons", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" step="any" value={line.liters} onChange={e => updateItem(line.id, "liters", e.target.value === "" ? 0 : Number(e.target.value))} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" step="any" value={line.ratePerCtn} onChange={e => updateItem(line.id, "ratePerCtn", parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-xs font-black text-right outline-none bg-transparent" /></td>
-                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono">{line.grossAmount.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono">{Math.round(line.grossAmount).toLocaleString()}</td>
                         <td className="p-0 border-r"><input type="number" value={line.discPercent} onChange={e => updateItem(line.id, "discPercent", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
-                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono text-rose-600">{line.discount.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-xs font-black text-right font-mono text-blue-800">{line.netAmount.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono text-rose-600">{Math.round(line.discount).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-xs font-black text-right font-mono text-blue-800">{Math.round(line.netAmount).toLocaleString()}</td>
                         <td className="p-1"><button onClick={() => removeItem(line.id)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={14}/></button></td>
                       </tr>
                       );
@@ -1258,11 +1302,11 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
 
            <div className="col-span-12 lg:col-span-5 bg-slate-800 text-white p-6 rounded border border-slate-900 shadow-xl space-y-4">
               <div className="space-y-3">
-                  <div className="flex justify-between items-center border-b border-slate-700 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Gross Total</span><span className="text-lg font-black font-mono">{grossTotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center border-b border-slate-700 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Gross Total</span><span className="text-lg font-black font-mono">{Math.round(grossTotal).toLocaleString()}</span></div>
                   <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Additional Discount</span><input type="number" value={formData.additionalDiscount} onChange={e => setFormData({...formData, additionalDiscount: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-rose-400 outline-none no-spinner" /></div>
                   <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Car Service</span><input type="number" value={formData.carService} onChange={e => setFormData({...formData, carService: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-blue-300 outline-none no-spinner" /></div>
                   <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Car Wash Discount</span><input type="number" value={formData.carServiceDiscount} onChange={e => setFormData({...formData, carServiceDiscount: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-rose-300 outline-none no-spinner" /></div>
-                  <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg border border-slate-600 mt-4"><span className="text-sm font-black text-white uppercase tracking-wider">Net Total</span><span className="text-3xl font-black font-mono text-yellow-400">{netTotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg border border-slate-600 mt-4"><span className="text-sm font-black text-white uppercase tracking-wider">Net Total</span><span className="text-3xl font-black font-mono text-yellow-400">{Math.round(netTotal).toLocaleString()}</span></div>
                   
                   {formData.customerAdvanceStats && formData.customerAdvanceStats.remainingAdvance > 0 && (
                     <div className="bg-slate-700/30 p-3 rounded-lg border border-slate-600 space-y-2 mt-2">
@@ -1313,7 +1357,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
                   )}
                   
                  <div className="flex justify-between items-center pt-4"><span className="text-xs font-bold text-slate-400 uppercase">Amount Received</span><input type="number" value={formData.amountReceived} onChange={e => setFormData({...formData, amountReceived: Number(e.target.value)})} className="w-40 bg-white text-slate-900 border-none rounded px-3 py-2 text-right text-lg font-black font-mono outline-none" /></div>
-                 <div className="flex justify-between items-center pt-2"><span className="text-xs font-bold text-slate-400 uppercase">Balance</span><span className={`text-xl font-black font-mono ${balanceAmount > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{balanceAmount.toFixed(2)}</span></div>
+                 <div className="flex justify-between items-center pt-2"><span className="text-xs font-bold text-slate-400 uppercase">Balance</span><span className={`text-xl font-black font-mono ${balanceAmount > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{Math.round(balanceAmount).toLocaleString()}</span></div>
               </div>
            </div>
         </div>

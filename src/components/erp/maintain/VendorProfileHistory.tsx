@@ -82,15 +82,19 @@ export default function VendorProfileHistory({
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [purchasesRes, cashRes, bankRes] = await Promise.all([
+      const [purchasesRes, cashRes, bankRes, cashReceiptsRes, bankReceiptsRes] = await Promise.all([
         fetch("/api/purchases"),
         fetch("/api/cash-payments"),
-        fetch("/api/bank-payments")
+        fetch("/api/bank-payments"),
+        fetch("/api/cash-receipts"),
+        fetch("/api/bank-receipts")
       ]);
-      const [purchasesJson, cashJson, bankJson] = await Promise.all([
+      const [purchasesJson, cashJson, bankJson, cashReceiptsJson, bankReceiptsJson] = await Promise.all([
         purchasesRes.json(),
         cashRes.json(),
-        bankRes.json()
+        bankRes.json(),
+        cashReceiptsRes.json(),
+        bankReceiptsRes.json()
       ]);
 
       let vendorPurchases: any[] = [];
@@ -136,6 +140,38 @@ export default function VendorProfileHistory({
         });
       }
 
+      // 4. Process Vendor Receipts (CashReceipts / BankReceipts for Vendor)
+      if (cashReceiptsJson.ok && cashReceiptsJson.data) {
+        cashReceiptsJson.data.forEach((r: any) => {
+          const match = r.partyId?._id === vendor._id || r.partyId === vendor._id || r.party === vendor._id || r.party === vendor.name || r.party === vendor.companyName;
+          if (match) {
+            vendorPayments.push({
+              ...r,
+              method: "Cash Receipt",
+              isVendorReceipt: true,
+              reference: r.reference || r.receiptNumber,
+              voucherNo: r.receiptNumber || r.voucherNo,
+              user: r.employeeId?.name || "Admin"
+            });
+          }
+        });
+      }
+      if (bankReceiptsJson.ok && bankReceiptsJson.data) {
+        bankReceiptsJson.data.forEach((r: any) => {
+          const match = r.partyId?._id === vendor._id || r.partyId === vendor._id || r.party === vendor._id || r.party === vendor.name || r.party === vendor.companyName;
+          if (match) {
+            vendorPayments.push({
+              ...r,
+              method: "Bank Receipt",
+              isVendorReceipt: true,
+              reference: r.instrumentNo || r.receiptNumber,
+              voucherNo: r.receiptNumber || r.voucherNo,
+              user: "Admin"
+            });
+          }
+        });
+      }
+
       setPurchases(vendorPurchases.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()));
       setPayments(vendorPayments.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()));
     } catch (e) {
@@ -163,25 +199,44 @@ export default function VendorProfileHistory({
     // Process Purchases & Returns (Purchases increase credit (payable), Returns increase debit (receivable))
     purchases.forEach((p: any) => {
       const isReturn = p.type === "purchase_return" || p.type === "non_tax_purchase_return";
+      const totalAmt = Number(p.totalAmount) || 0;
+      let paidAtCreation = 0;
+      if (!isReturn) {
+        const invNo = p.invoiceNo || "";
+        // Deduct linked cash/bank payment amounts to avoid double-counting
+        const linkedCashAmt = invNo ? payments
+          .filter((py: any) => !py.isVendorReceipt && py.method === "Cash" && (py.reference === invNo || (py.narration && py.narration.toLowerCase().includes(invNo.toLowerCase()))))
+          .reduce((sum: number, py: any) => sum + (Number(py.amount) || 0), 0) : 0;
+        const linkedBankAmt = invNo ? payments
+          .filter((py: any) => !py.isVendorReceipt && py.method === "Bank" && (py.reference === invNo || py.chequeNo === invNo || (py.instrumentNo && py.instrumentNo.toLowerCase().includes(invNo.toLowerCase()))))
+          .reduce((sum: number, py: any) => sum + (Number(py.amount) || 0), 0) : 0;
+
+        const rawPaid = (Number(p.amountReceived) > 0 ? Number(p.amountReceived) : 0) ||
+                         (Number(p.amountPaid) > 0 ? Number(p.amountPaid) : 0) ||
+                         ((p.paymentMethod === "Cash" || p.paymentMethod === "Bank" || p.status === "paid" || p.balance === 0) ? totalAmt : 0);
+
+        paidAtCreation = Math.max(0, rawPaid - (linkedCashAmt + linkedBankAmt));
+      }
       txs.push({
         date: new Date(p.date || p.createdAt),
         voucherNo: p.invoiceNo || p.poNumber,
         type: isReturn ? "Purchase Return" : "Purchase Invoice",
         remarks: p.notes || (isReturn ? "Goods Returned to Vendor" : `Purchase invoice posted (${p.paymentMethod || 'Credit'})`),
-        debit: isReturn ? p.totalAmount || 0 : 0,
-        credit: isReturn ? 0 : p.totalAmount || 0
+        debit: isReturn ? totalAmt : paidAtCreation,
+        credit: isReturn ? 0 : totalAmt
       });
     });
 
-    // Process Payments (Payments to vendor increase debit (reduce payable))
+    // Process Payments & Vendor Receipts (Payments to vendor increase debit, Vendor Receipts increase credit)
     payments.forEach((p: any) => {
+      const isVendorReceipt = p.isVendorReceipt || p.method === "Cash Receipt" || p.method === "Bank Receipt";
       txs.push({
         date: new Date(p.date || p.createdAt),
-        voucherNo: p.voucherNo,
-        type: p.method === "Cash" ? "Cash Payment" : "Bank Payment",
-        remarks: p.narration || p.notes || `Payment made via ${p.method}`,
-        debit: p.amount || 0,
-        credit: 0
+        voucherNo: p.voucherNo || p.receiptNumber,
+        type: isVendorReceipt ? "Vendor Receipt" : (p.method === "Cash" ? "Cash Payment" : "Bank Payment"),
+        remarks: p.narration || p.notes || (isVendorReceipt ? "Receipt from Vendor" : `Payment made via ${p.method}`),
+        debit: isVendorReceipt ? 0 : (p.amount || 0),
+        credit: isVendorReceipt ? (p.amount || 0) : 0
       });
     });
 
@@ -224,12 +279,12 @@ export default function VendorProfileHistory({
 
   // Overview metrics calculations
   const totalPurchases = purchases.filter(p => p.type !== "purchase_return" && p.type !== "non_tax_purchase_return").reduce((a, p) => a + (p.totalAmount || 0), 0);
-  const totalPaymentsVal = payments.reduce((a, p) => a + (p.amount || 0), 0);
+  const totalPaymentsVal = ledgerData.totalDr;
   
   const lastPurchaseTx = purchases.find(p => p.type !== "purchase_return" && p.type !== "non_tax_purchase_return");
   const lastPaymentTx = payments[0];
 
-  const currentPayable = Math.max(0, (vendor.openingBalance || 0) + totalPurchases - totalPaymentsVal);
+  const currentPayable = Math.max(0, ledgerData.closing);
 
   // TAB 1: Filtered Purchases
   const filteredPurchases = purchases.filter(p => {
@@ -429,9 +484,9 @@ export default function VendorProfileHistory({
             </div>
             <div className="text-left min-w-[120px]">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Balance</p>
-              <p className={`text-lg font-black mt-0.5 ${vendor.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                PKR {Math.round(vendor.balance || 0).toLocaleString()}
-                <span className="text-xs ml-0.5 font-bold">{vendor.balance > 0 ? ' (Payable)' : ' (Advance)'}</span>
+              <p className={`text-lg font-black mt-0.5 ${ledgerData.closing >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                PKR {Math.round(Math.abs(ledgerData.closing)).toLocaleString()}
+                <span className="text-xs ml-0.5 font-bold">{ledgerData.closing >= 0 ? ' (Payable)' : ' (Advance)'}</span>
               </p>
             </div>
             <div className="text-left min-w-[120px]">

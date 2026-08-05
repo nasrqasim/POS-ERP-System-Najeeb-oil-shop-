@@ -33,8 +33,12 @@ export default function CustomerBalancesReportPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   useEffect(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
     setFromDate("2025-01-01");
-    setToDate("2026-07-16");
+    setToDate(`${year}-${month}-${day}`);
   }, []);
 
   useEffect(() => {
@@ -103,15 +107,27 @@ export default function CustomerBalancesReportPage() {
 
     const result = rawParties.map((p: any) => {
       const partyId = p._id;
+      const partyName = p.name || p.companyName || "";
+      const partyCompany = p.companyName || p.name || "";
       // Use absolute value of opening balance for display (receivables/payables should be positive)
       const initialOpening = Math.abs(Number(p.openingBalance) || 0);
 
-      // Filter transactions for this customer
-      const pInvoices = invoices.filter((inv: any) => inv.partyId?._id === partyId || inv.partyId === partyId);
-      const pCashReceipts = cashReceipts.filter((r: any) => r.partyId?._id === partyId || r.partyId === partyId);
-      const pBankReceipts = bankReceipts.filter((r: any) => r.partyId?._id === partyId || r.partyId === partyId || r.party === partyId);
-      const pCashPayments = cashPayments.filter((py: any) => py.partyId?._id === partyId || py.partyId === partyId || py.vendor === partyId);
-      const pBankPayments = bankPayments.filter((py: any) => py.vendor === partyId);
+      // Filter transactions for this customer using identical match rules as CustomerProfileHistory
+      const pInvoices = invoices.filter((inv: any) => 
+        inv.partyId?._id === partyId || inv.partyId === partyId || inv.customerName === partyName || inv.customerName === partyCompany
+      );
+      const pCashReceipts = cashReceipts.filter((r: any) => 
+        r.partyId?._id === partyId || r.partyId === partyId || r.party === partyId || r.party === partyName || r.party === partyCompany
+      );
+      const pBankReceipts = bankReceipts.filter((r: any) => 
+        r.partyId?._id === partyId || r.partyId === partyId || r.party === partyId || r.party === partyName || r.party === partyCompany
+      );
+      const pCashPayments = cashPayments.filter((py: any) => 
+        py.partyId?._id === partyId || py.partyId === partyId || py.vendor === partyId || py.vendor === partyName || py.vendor === partyCompany
+      );
+      const pBankPayments = bankPayments.filter((py: any) => 
+        py.partyId?._id === partyId || py.partyId === partyId || py.vendor === partyId || py.vendor === partyName || py.vendor === partyCompany
+      );
 
       // Collect all transactions into a single list
       const txs: any[] = [];

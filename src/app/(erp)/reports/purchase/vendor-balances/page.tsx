@@ -30,8 +30,12 @@ export default function VendorBalancesReportPage() {
   const [bankPayments, setBankPayments] = useState<any[]>([]);
 
   useEffect(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
     setFromDate("2025-01-01");
-    setToDate("2026-07-16");
+    setToDate(`${year}-${month}-${day}`);
   }, []);
 
   useEffect(() => {
@@ -115,10 +119,27 @@ export default function VendorBalancesReportPage() {
       pInvoices.forEach((s: any) => {
         const isReturn = s.type === "purchase_return" || s.type === "non_tax_purchase_return";
         if (["purchase", "non_tax_purchase", "import_purchase", "purchase_return", "non_tax_purchase_return"].includes(s.type)) {
+          const totalAmt = Number(s.totalAmount) || 0;
+          let paidAtCreation = 0;
+          if (!isReturn) {
+            const invNo = s.invoiceNo || "";
+            const linkedCashAmt = invNo ? pCashPayments
+              .filter((py: any) => py.reference === invNo || (py.narration && py.narration.toLowerCase().includes(invNo.toLowerCase())))
+              .reduce((sum: number, py: any) => sum + (Number(py.amount) || 0), 0) : 0;
+            const linkedBankAmt = invNo ? pBankPayments
+              .filter((py: any) => py.instrumentNo === invNo || (py.instrumentNo && py.instrumentNo.toLowerCase().includes(invNo.toLowerCase())))
+              .reduce((sum: number, py: any) => sum + (Number(py.amount) || 0), 0) : 0;
+
+            const rawPaid = (Number(s.amountReceived) > 0 ? Number(s.amountReceived) : 0) ||
+                            (Number(s.amountPaid) > 0 ? Number(s.amountPaid) : 0) ||
+                            ((s.paymentMethod === "Cash" || s.paymentMethod === "Bank" || s.status === "paid" || s.balance === 0) ? totalAmt : 0);
+
+            paidAtCreation = Math.max(0, rawPaid - (linkedCashAmt + linkedBankAmt));
+          }
           txs.push({
             date: new Date(s.date || s.createdAt),
-            debit: isReturn ? s.totalAmount || 0 : 0,
-            credit: isReturn ? 0 : s.totalAmount || 0
+            debit: isReturn ? totalAmt : paidAtCreation,
+            credit: isReturn ? 0 : totalAmt
           });
         }
       });

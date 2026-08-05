@@ -6,6 +6,6 @@ export function formatDate(value: unknown) {
 }
 
 export function formatMoney(value: unknown) {
-  const n = Number(value || 0);
-  return `Rs. ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const n = Math.round(Number(value || 0));
+  return `Rs. ${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }

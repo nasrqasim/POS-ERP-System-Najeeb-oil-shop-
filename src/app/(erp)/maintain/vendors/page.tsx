@@ -360,7 +360,7 @@ export default function VendorsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
         <ERPStatCard label="Active Vendors" value={vendors.filter(v => v.status === "Active").length} icon={UserCheck} variant="green" />
         <ERPStatCard label="Inactive Vendors" value={vendors.filter(v => v.status === "Inactive").length} icon={UserX} variant="slate" />
-        <ERPStatCard label="Total Payable" value={`Rs. ${(vendors.reduce((acc, v) => acc + (v.balance > 0 ? v.balance : 0), 0) / 1000000).toFixed(1)}M`} icon={Wallet} variant="maroon" />
+        <ERPStatCard label="Total Payable" value={`Rs. ${Math.round(vendors.reduce((acc, v) => acc + (v.balance > 0 ? v.balance : 0), 0)).toLocaleString()}`} icon={Wallet} variant="maroon" />
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-8 no-print">

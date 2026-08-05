@@ -213,11 +213,24 @@ export default function CustomerProfileHistory({
     // Process Sales & Returns
     sales.forEach((s: any) => {
       const isReturn = s.type === "sale_return" || s.type === "non_tax_sale_return";
+      // Build product description like old software
+      const itemsList = s.lines || s.items || [];
+      let productDesc = '';
+      if (itemsList.length > 0) {
+        productDesc = itemsList.map((item: any) => {
+          const name = item.itemId?.name || item.description || '';
+          const qty = item.qty || item.cartons || 1;
+          const rate = item.rate || item.unitPrice || 0;
+          const total = qty * rate;
+          return `(${name} - ${qty} @Rs.${rate.toLocaleString()} =Rs.${total.toLocaleString()})`;
+        }).join(' ');
+      }
       txs.push({
         date: new Date(s.date || s.createdAt),
         voucherNo: s.invoiceNo,
+        reference: s.vehicleNo || s.builtyNo || '',
         type: isReturn ? "Sale Return" : "Sale Invoice",
-        remarks: s.notes || (isReturn ? "Goods Returned" : `Sales invoice posted (${s.paymentMethod || 'Credit'})`),
+        remarks: productDesc || s.notes || (isReturn ? "Goods Returned" : `Sale Invoice`),
         debit: isReturn ? 0 : s.totalAmount || 0,
         credit: isReturn ? s.totalAmount || 0 : 0
       });
@@ -225,13 +238,16 @@ export default function CustomerProfileHistory({
 
     // Process Receipts
     receipts.forEach((r: any) => {
+      const amt = r.amount || 0;
+      const desc = `Cash Rcvd - Invoices Cash Rec Rs.${amt.toLocaleString()}.00`;
       txs.push({
         date: new Date(r.date || r.createdAt),
         voucherNo: r.receiptNumber,
+        reference: r.reference || '',
         type: r.method === "Cash" ? "Cash Receipt" : "Bank Receipt",
-        remarks: r.remarks || `Payment received via ${r.method}`,
+        remarks: desc,
         debit: 0,
-        credit: r.amount || 0
+        credit: amt
       });
     });
 
@@ -240,6 +256,7 @@ export default function CustomerProfileHistory({
       txs.push({
         date: new Date(p.date || p.createdAt),
         voucherNo: p.voucherNo,
+        reference: p.reference || '',
         type: p.method === "Cash" ? "Cash Payment" : "Bank Payment",
         remarks: p.narration || p.notes || `Payment made via ${p.method}`,
         debit: p.amount || 0,
@@ -1029,67 +1046,72 @@ export default function CustomerProfileHistory({
                   <table className="w-full text-left border-collapse text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">Date</th>
-                        <th className="px-4 py-3">Doc No</th>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3">Description</th>
-                        <th className="px-4 py-3 text-right">Debit (Dr)</th>
-                        <th className="px-4 py-3 text-right">Credit (Cr)</th>
-                        <th className="px-4 py-3 text-right">Balance</th>
+                        <th className="px-3 py-3">Date</th>
+                        <th className="px-3 py-3">Tran. No.</th>
+                        <th className="px-3 py-3">Reference No.</th>
+                        <th className="px-3 py-3">Description</th>
+                        <th className="px-3 py-3 text-right">Debit PKR</th>
+                        <th className="px-3 py-3 text-right">Credit PKR</th>
+                        <th className="px-3 py-3 text-right">Balance PKR</th>
+                        <th className="px-3 py-3 text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-850 font-bold text-slate-700 dark:text-slate-350">
-                      <tr className="bg-slate-50/50 dark:bg-slate-850/50 font-black">
-                        <td className="px-4 py-3 text-slate-400">{filterByPeriod && ledgerFromDate ? new Date(ledgerFromDate).toLocaleDateString() : "-"}</td>
-                        <td className="px-4 py-3">-</td>
-                        <td className="px-4 py-3">
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[9px] rounded font-black tracking-widest text-slate-500">OPEN</span>
+                      <tr className="bg-amber-50/60 dark:bg-slate-850/50 font-black">
+                        <td className="px-3 py-3 text-slate-400">{filterByPeriod && ledgerFromDate ? (() => { const d = new Date(ledgerFromDate); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(-2)}`; })() : "-"}</td>
+                        <td className="px-3 py-3 text-slate-500">OB</td>
+                        <td className="px-3 py-3">-</td>
+                        <td className="px-3 py-3 font-black text-slate-600 dark:text-slate-300">{filterByPeriod ? "Opening Balance" : "Balance Brought Forward"}</td>
+                        <td className="px-3 py-3 text-right">{ledgerData.opening > 0 ? `${Math.round(ledgerData.opening).toLocaleString()}.00` : '-'}</td>
+                        <td className="px-3 py-3 text-right">{ledgerData.opening < 0 ? `${Math.round(Math.abs(ledgerData.opening)).toLocaleString()}.00` : '-'}</td>
+                        <td className="px-3 py-3 text-right text-slate-900 dark:text-white font-extrabold">{Math.round(Math.abs(ledgerData.opening)).toLocaleString()}.00</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-black ${ledgerData.opening >= 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{ledgerData.opening >= 0 ? 'Debit' : 'Credit'}</span>
                         </td>
-                        <td className="px-4 py-3 uppercase tracking-tighter text-slate-400">{filterByPeriod ? "Opening Balance" : "Balance Brought Forward"}</td>
-                        <td className="px-4 py-3 text-right">-</td>
-                        <td className="px-4 py-3 text-right">-</td>
-                        <td className="px-4 py-3 text-right text-slate-900 dark:text-white">Rs. {Math.round(ledgerData.opening).toLocaleString()}</td>
                       </tr>
 
                       {ledgerData.rows.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400 font-bold italic uppercase tracking-wider text-[10px]">
+                          <td colSpan={8} className="px-3 py-8 text-center text-slate-400 font-bold italic uppercase tracking-wider text-[10px]">
                             No transactions recorded during this period
                           </td>
                         </tr>
                       ) : (
-                        ledgerData.rows.map((row, i) => (
+                        ledgerData.rows.map((row, i) => {
+                          const d = new Date(row.date);
+                          const dateStr = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(-2)}`;
+                          return (
                           <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/50 transition-colors">
-                            <td className="px-4 py-3">{new Date(row.date).toLocaleDateString()}</td>
-                            <td className="px-4 py-3 text-blue-600">{row.voucherNo}</td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                                row.type === "Sale Invoice" ? "bg-emerald-50 text-emerald-600" :
-                                row.type === "Sale Return" ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"
-                              }`}>
-                                {row.type}
-                              </span>
+                            <td className="px-3 py-3">{dateStr}</td>
+                            <td className="px-3 py-3 text-blue-600 font-extrabold">{row.voucherNo}</td>
+                            <td className="px-3 py-3 text-slate-500">{row.reference || '-'}</td>
+                            <td className="px-3 py-3 text-xs max-w-[300px] truncate" title={row.remarks}>{row.remarks}</td>
+                            <td className="px-3 py-3 text-right text-emerald-700">
+                              {row.debit > 0 ? `${Math.round(row.debit).toLocaleString()}.00` : ''}
                             </td>
-                            <td className="px-4 py-3">{row.remarks}</td>
-                            <td className="px-4 py-3 text-right text-emerald-700">
-                              {row.debit > 0 ? `Rs. ${Math.round(row.debit).toLocaleString()}` : "-"}
+                            <td className="px-3 py-3 text-right text-rose-700">
+                              {row.credit > 0 ? `${Math.round(row.credit).toLocaleString()}.00` : ''}
                             </td>
-                            <td className="px-4 py-3 text-right text-rose-700">
-                              {row.credit > 0 ? `Rs. ${Math.round(row.credit).toLocaleString()}` : "-"}
+                            <td className="px-3 py-3 text-right text-slate-900 dark:text-white font-extrabold">
+                              {Math.round(Math.abs(row.runningBalance)).toLocaleString()}.00
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-900 dark:text-white font-extrabold">
-                              Rs. {Math.round(row.runningBalance).toLocaleString()}
+                            <td className="px-3 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black ${row.runningBalance >= 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{row.runningBalance >= 0 ? 'Debit' : 'Credit'}</span>
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
 
-                      <tr className="bg-slate-100 dark:bg-slate-800 font-black text-slate-950 dark:text-white border-t border-slate-200 dark:border-slate-700">
-                        <td colSpan={4} className="px-4 py-3.5 text-right uppercase tracking-widest text-[9px]">Statement Summary & Closing</td>
-                        <td className="px-4 py-3.5 text-right text-emerald-700">Rs. {Math.round(ledgerData.totalDr).toLocaleString()}</td>
-                        <td className="px-4 py-3.5 text-right text-rose-700">Rs. {Math.round(ledgerData.totalCr).toLocaleString()}</td>
-                        <td className="px-4 py-3.5 text-right text-maroon-800 dark:text-maroon-400 text-sm">
-                          Rs. {Math.round(ledgerData.closing).toLocaleString()}
+                      <tr className="bg-slate-100 dark:bg-slate-800 font-black text-slate-950 dark:text-white border-t-2 border-slate-300 dark:border-slate-700">
+                        <td colSpan={4} className="px-3 py-3.5 text-right uppercase tracking-widest text-[9px]">Totals PKR</td>
+                        <td className="px-3 py-3.5 text-right text-emerald-700">{Math.round(ledgerData.totalDr).toLocaleString()}.00</td>
+                        <td className="px-3 py-3.5 text-right text-rose-700">{Math.round(ledgerData.totalCr).toLocaleString()}.00</td>
+                        <td className="px-3 py-3.5 text-right text-maroon-800 dark:text-maroon-400 text-sm font-extrabold">
+                          {Math.round(Math.abs(ledgerData.closing)).toLocaleString()}.00
+                        </td>
+                        <td className="px-3 py-3.5 text-center">
+                          <span className={`px-2.5 py-1 rounded text-[9px] font-black ${ledgerData.closing >= 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{ledgerData.closing >= 0 ? 'Debit' : 'Credit'}</span>
                         </td>
                       </tr>
                     </tbody>

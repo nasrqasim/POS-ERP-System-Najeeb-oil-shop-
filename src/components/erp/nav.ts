@@ -105,23 +105,7 @@ export const erpModules: ERPNavItem[] = [
       { title: "POS Counter Sale", href: "/sales/pos-counter-sale", roles: ["admin", "salesman", "dataentry"] },
     ]
   },
-  { 
-    title: "Store", 
-    href: "/store", 
-    roles: ["admin", "dataentry"],
-    icon: Warehouse,
-    submenu: [
-      { title: "Purchase Requisition", href: "/store/purchase-requisition", roles: ["admin", "dataentry"] },
-      { title: "Inward Gate Pass", href: "/store/inward-gate-pass", roles: ["admin", "dataentry"] },
-      { title: "Outward Gate Pass", href: "/store/outward-gate-pass", roles: ["admin", "dataentry"] },
-      { title: "Bill of Materials", href: "/store/bill-of-materials", roles: ["admin", "dataentry"] },
-      { title: "Production Order", href: "/store/production-order", roles: ["admin", "dataentry"] },
-      { title: "Add Stock", href: "/store/add-stock", roles: ["admin", "dataentry"] },
-      { title: "Reduce Stock", href: "/store/reduce-stock", roles: ["admin", "dataentry"] },
-      { title: "Stock Transfer", href: "/store/stock-transfer", roles: ["admin", "dataentry"] },
-      { title: "Branch Transfer", href: "/store/branch-transfer", roles: ["admin", "dataentry"] },
-    ]
-  },
+
   { 
     title: "Receipts", 
     href: "/receipts", 

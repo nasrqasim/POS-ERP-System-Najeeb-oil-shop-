@@ -96,6 +96,7 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
   });
 
   const [printData, setPrintData] = useState<any>(null);
+  const isInitializedRef = useRef(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   const handleSaveCustomer = async (newCustomerData: any) => {
@@ -201,12 +202,32 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
         );
         setCustomers(activeCustomers);
         setAllCustomers(activeCustomers);
+
+        if (!isInitializedRef.current && !initialData) {
+          const defaultCust = activeCustomers.find((c: any) => 
+            c.name.toLowerCase() === "walk-in cash customer" || 
+            c.name.toLowerCase() === "walk-in(cash) customer" ||
+            c.name.toLowerCase().includes("walk-in")
+          );
+          if (defaultCust) {
+            setFormData(prev => ({
+              ...prev,
+              customerId: defaultCust._id,
+              customerName: defaultCust.name,
+              customerCode: defaultCust.code,
+              customerAddress: defaultCust.address || "",
+              customerTelephone: defaultCust.phone || "",
+              customerBalance: defaultCust.balance || 0
+            }));
+          }
+          isInitializedRef.current = true;
+        }
       }
       if (locsData.ok) setLocations(locsData.data);
       if (empsData.ok) setEmployees(empsData.data);
       if (banksData.ok) setBanks(banksData.data);
     } catch (e) { console.error(e); }
-  }, []);
+  }, [initialData]);
 
   useEffect(() => {
     fetchData();
@@ -241,41 +262,21 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
   // Track currently edited invoice ID
   const [currentInvoiceId, setCurrentInvoiceId] = useState(initialData?._id || "");
 
-  // Default customer loading & editing customer balance Sync
+  // Sync customer details when customer ID changes via selection
   useEffect(() => {
-    if (allCustomers.length > 0) {
-      if (!formData.customerId && !currentInvoiceId) {
-        const defaultCust = allCustomers.find(c => 
-          c.name.toLowerCase() === "walk-in cash customer" || 
-          c.name.toLowerCase() === "walk-in(cash) customer" ||
-          c.name.toLowerCase().includes("walk-in")
-        );
-        if (defaultCust) {
-          setFormData(prev => ({
-            ...prev,
-            customerId: defaultCust._id,
-            customerName: defaultCust.name,
-            customerCode: defaultCust.code,
-            customerAddress: defaultCust.address || "",
-            customerTelephone: defaultCust.phone || "",
-            customerBalance: defaultCust.balance || 0
-          }));
-        }
-      } else if (formData.customerId) {
-        const currentCust = allCustomers.find(c => c._id === formData.customerId);
-        if (currentCust) {
-          setFormData(prev => ({
-            ...prev,
-            customerBalance: currentCust.balance || 0,
-            customerCode: currentCust.code || prev.customerCode,
-            customerAddress: currentCust.address || prev.customerAddress,
-            customerTelephone: currentCust.phone || prev.customerTelephone,
-            customerName: currentCust.name || prev.customerName
-          }));
-        }
+    if (allCustomers.length > 0 && formData.customerId) {
+      const currentCust = allCustomers.find(c => c._id === formData.customerId);
+      if (currentCust) {
+        setFormData(prev => ({
+          ...prev,
+          customerBalance: currentCust.balance || 0,
+          customerCode: currentCust.code || prev.customerCode,
+          customerAddress: currentCust.address || prev.customerAddress,
+          customerTelephone: currentCust.phone || prev.customerTelephone
+        }));
       }
     }
-  }, [allCustomers, currentInvoiceId, formData.customerId]);
+  }, [allCustomers, formData.customerId]);
 
   const [showPrevInvoicesModal, setShowPrevInvoicesModal] = useState(false);
   const [prevInvoices, setPrevInvoices] = useState<any[]>([]);
@@ -458,7 +459,16 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
 
   const displayedCustomers = useMemo(() => {
     if (!showCustomerSearch) return [];
-    return customers;
+    const seen = new Set();
+    const result: any[] = [];
+    for (const c of customers) {
+      const id = c._id?.toString() || c.code || c.name;
+      if (!seen.has(id)) {
+        seen.add(id);
+        result.push(c);
+      }
+    }
+    return result;
   }, [showCustomerSearch, customers]);
 
   useEffect(() => {
@@ -590,8 +600,9 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
 
         if (field === "cartons" || field === "gallons" || field === "liters" || field === "ratePerCtn" || field === "itemId") {
           const qty = Number(updated.cartons) || 0;
-          updated.grossAmount = qty * (Number(updated.ratePerCtn) || 0);
-          updated.netAmount = updated.grossAmount;
+          const grossAmt = qty * (Number(updated.ratePerCtn) || 0);
+          updated.grossAmount = Math.round(grossAmt);
+          updated.netAmount = Math.round(grossAmt);
         }
 
         if (field === "itemId" && item) {
@@ -607,8 +618,9 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
           updated.liters = defaultLtrs;
 
           const qty = Number(updated.cartons) || 0;
-          updated.grossAmount = qty * (Number(updated.ratePerCtn) || 0);
-          updated.netAmount = updated.grossAmount;
+          const grossAmt = qty * (Number(updated.ratePerCtn) || 0);
+          updated.grossAmount = Math.round(grossAmt);
+          updated.netAmount = Math.round(grossAmt);
         }
         return updated;
       }
@@ -988,15 +1000,15 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
                         </td>
                         <td className="px-3 py-2 text-xs font-medium border-r">{line.description}</td>
                         <td className="px-3 py-2 text-xs font-black text-right border-r font-mono bg-slate-50">
-                          {(availableItems.find(ai => ai._id === line.itemId)?.purchaseRate || 0).toFixed(2)}
+                          {Math.round(availableItems.find(ai => ai._id === line.itemId)?.purchaseRate || 0).toLocaleString()}
                         </td>
                         <td className="p-0 border-r"><input type="number" value={line.cartons} onChange={e => updateItem(line.id, "cartons", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" value={line.gallons} onChange={e => updateItem(line.id, "gallons", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" value={line.liters} onChange={e => updateItem(line.id, "liters", parseFloat(e.target.value) || 0)} className="w-full px-2 py-2 text-xs font-black text-center outline-none bg-transparent" /></td>
                         <td className="p-0 border-r"><input type="number" value={line.ratePerCtn} onChange={e => updateItem(line.id, "ratePerCtn", parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-xs font-black text-right outline-none bg-transparent" /></td>
-                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono">-{line.grossAmount.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-xs font-black text-right border-r font-mono">-{Math.round(line.grossAmount).toLocaleString()}</td>
                         <td className="p-0 border-r"><input type="text" value={line.reason} onChange={e => updateItem(line.id, "reason", e.target.value)} className="w-full px-3 py-2 text-xs font-bold outline-none bg-transparent" placeholder="Reason for return" /></td>
-                        <td className="px-3 py-2 text-xs font-black text-right font-mono text-rose-600">-{line.netAmount.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-xs font-black text-right font-mono text-rose-600">-{Math.round(line.netAmount).toLocaleString()}</td>
                         <td className="p-1"><button onClick={() => removeItem(line.id)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={14}/></button></td>
                       </tr>
                       );
@@ -1118,13 +1130,13 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
 
            <div className="col-span-12 lg:col-span-5 bg-slate-800 text-white p-6 rounded border border-slate-900 shadow-xl space-y-4">
               <div className="space-y-3">
-                 <div className="flex justify-between items-center border-b border-slate-700 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Gross Refund</span><span className="text-lg font-black font-mono">-{grossTotal.toFixed(2)}</span></div>
+                 <div className="flex justify-between items-center border-b border-slate-700 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Gross Refund</span><span className="text-lg font-black font-mono">-{Math.round(grossTotal).toLocaleString()}</span></div>
                  <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Additional Discount</span><input type="number" value={formData.additionalDiscount} onChange={e => setFormData({...formData, additionalDiscount: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-rose-400 outline-none" /></div>
                  <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Car Service</span><input type="number" value={formData.carService} onChange={e => setFormData({...formData, carService: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-blue-300 outline-none" /></div>
                  <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-400 uppercase">Car Wash Discount</span><input type="number" value={formData.carServiceDiscount} onChange={e => setFormData({...formData, carServiceDiscount: Math.max(0, Number(e.target.value) || 0)})} className="w-32 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-right font-black font-mono text-rose-300 outline-none" /></div>
-                 <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg border border-slate-600 mt-4"><span className="text-sm font-black text-white uppercase tracking-wider">Net Refund</span><span className="text-3xl font-black font-mono text-rose-400">-{netTotal.toFixed(2)}</span></div>
+                 <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg border border-slate-600 mt-4"><span className="text-sm font-black text-white uppercase tracking-wider">Net Refund</span><span className="text-3xl font-black font-mono text-rose-400">-{Math.round(netTotal).toLocaleString()}</span></div>
                  <div className="flex justify-between items-center pt-4"><span className="text-xs font-bold text-slate-400 uppercase">Amount Refunded</span><input type="number" value={formData.amountReceived} onChange={e => setFormData({...formData, amountReceived: Number(e.target.value)})} className="w-40 bg-white text-slate-900 border-none rounded px-3 py-2 text-right text-lg font-black font-mono outline-none" /></div>
-                 <div className="flex justify-between items-center pt-2"><span className="text-xs font-bold text-slate-400 uppercase">Balance</span><span className={`text-xl font-black font-mono ${balanceAmount > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>-{balanceAmount.toFixed(2)}</span></div>
+                 <div className="flex justify-between items-center pt-2"><span className="text-xs font-bold text-slate-400 uppercase">Balance</span><span className={`text-xl font-black font-mono ${balanceAmount > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>-{Math.round(balanceAmount).toLocaleString()}</span></div>
               </div>
            </div>
         </div>

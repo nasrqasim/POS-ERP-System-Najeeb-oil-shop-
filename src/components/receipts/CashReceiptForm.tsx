@@ -547,13 +547,13 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full min-w-[700px] text-left">
                     <thead className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800">
                       <tr>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-12 text-center">#</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-72">Account *</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-48 text-right">Amount (PKR) *</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-64">Account *</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[280px]">Description</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-44 text-right">Amount (PKR) *</th>
                         <th className="px-6 py-4 w-16 text-center"></th>
                       </tr>
                     </thead>
@@ -576,13 +576,13 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
                                   ))}
                               </select>
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 min-w-[280px]">
                               <input
                                 type="text"
                                 placeholder="Description / Narration"
                                 value={line.description}
                                 onChange={(e) => updateContraLine(idx, "description", e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold outline-none"
+                                className="w-full min-w-[260px] px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold outline-none"
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -759,7 +759,7 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Amount Details</h2>
           </div>
 
-          <div className="max-w-md space-y-4">
+          <div className="max-w-xl space-y-4">
             {(activeTab === "party" || (activeTab === "petty" && pettySubTab !== "general")) ? (
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Amount (PKR) *</label>
@@ -768,13 +768,13 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
                   placeholder="0.00"
                   value={formData.amount || ""}
                   onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl text-2xl font-black text-maroon-800 focus:ring-4 focus:ring-maroon-800/10 focus:bg-white dark:focus:bg-slate-900 transition-all text-right outline-none"
+                  className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-maroon-800/30 dark:border-maroon-800/50 rounded-2xl text-3xl font-black text-maroon-800 focus:ring-4 focus:ring-maroon-800/10 focus:bg-white dark:focus:bg-slate-900 transition-all text-right outline-none shadow-inner"
                 />
               </div>
             ) : (
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Amount (PKR) - Auto calculated</label>
-                <div className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-xl text-2xl font-black text-maroon-800 text-right">
+                <div className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-850 border-2 border-slate-200 dark:border-slate-800 rounded-2xl text-3xl font-black text-maroon-800 text-right shadow-inner">
                   {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
               </div>
@@ -782,7 +782,7 @@ export default function CashReceiptForm({ onClose, initialData }: CashReceiptFor
 
             <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <span className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Amount (PKR)</span>
-              <span className="text-2xl font-black text-slate-900 dark:text-white">
+              <span className="text-3xl font-black text-slate-900 dark:text-white">
                 {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>

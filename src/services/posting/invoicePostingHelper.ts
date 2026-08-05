@@ -124,7 +124,12 @@ export async function recalculatePartyBalance(partyId: string) {
           .filter((p: any) => p.instrumentNo === invNo || (p.instrumentNo && p.instrumentNo.toLowerCase().includes(invNo.toLowerCase())))
           .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-        const paidAtCreation = Math.max(0, (Number(inv.amountReceived) || 0) - (linkedCashAmt + linkedBankAmt));
+        const totalInvAmt = Number(inv.totalAmount) || 0;
+        const rawPaid = (Number(inv.amountReceived) > 0 ? Number(inv.amountReceived) : 0) ||
+                        (Number(inv.amountPaid) > 0 ? Number(inv.amountPaid) : 0) ||
+                        ((inv.paymentMethod === "Cash" || inv.paymentMethod === "Bank" || inv.status === "paid" || inv.balance === 0) ? totalInvAmt : 0);
+
+        const paidAtCreation = Math.max(0, rawPaid - (linkedCashAmt + linkedBankAmt));
         totalPaidAtCreation += paidAtCreation;
       }
     }
@@ -308,7 +313,20 @@ export async function generateInvoiceJournalEntries(invoice: any) {
     const taxAmount = Number(invoice.taxAmount) || 0;
     const subTotal = Number(invoice.subTotal) || 0;
     const discountAmount = Number(invoice.discountAmount) || 0;
-    const purchasesAmt = subTotal - discountAmount;
+    const purchasesAmt = Math.max(0, subTotal - discountAmount);
+
+    // Calculate additional purchase expenses
+    let expenseAmount = Number(invoice.expenseAmount) || 0;
+    if (Array.isArray(invoice.expenses) && invoice.expenses.length > 0) {
+      expenseAmount = invoice.expenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
+    }
+
+    const paidAmt = (Number(invoice.amountReceived) > 0 ? Number(invoice.amountReceived) : 0) ||
+                    (Number(invoice.amountPaid) > 0 ? Number(invoice.amountPaid) : 0) ||
+                    (isCash || isBank || invoice.status === "paid" || invoice.balance === 0 ? total : 0);
+
+    const paidPortion = Math.min(total, Math.max(0, paidAmt));
+    const unpaidPortion = Math.max(0, total - paidPortion);
 
     const entries = [];
 
@@ -325,7 +343,38 @@ export async function generateInvoiceJournalEntries(invoice: any) {
       partyId: invoice.partyId || null
     });
 
-    // 2. Debit Tax Account (if tax exists)
+    // 2. Debit Expenses (if expenses exist)
+    if (Array.isArray(invoice.expenses) && invoice.expenses.length > 0) {
+      for (const exp of invoice.expenses) {
+        if (Number(exp.amount) > 0) {
+          entries.push({
+            invoiceId: invoice._id,
+            voucherNo,
+            date,
+            accountCode: exp.accountCode || "6100",
+            accountTitle: exp.accountTitle || exp.description || "Purchase Expense",
+            debit: Number(exp.amount),
+            credit: 0,
+            remarks: `Purchase Expense - ${exp.description || "Freight/Handling"}`,
+            partyId: invoice.partyId || null
+          });
+        }
+      }
+    } else if (expenseAmount > 0) {
+      entries.push({
+        invoiceId: invoice._id,
+        voucherNo,
+        date,
+        accountCode: "6100",
+        accountTitle: "Shop/Dokan Maintenance Expense",
+        debit: expenseAmount,
+        credit: 0,
+        remarks: "Purchase Expense",
+        partyId: invoice.partyId || null
+      });
+    }
+
+    // 3. Debit Tax Account (if tax exists)
     if (taxAmount > 0) {
       const taxAcc = await getOrCreateTaxAccount();
       let vendorName = "";
@@ -348,34 +397,10 @@ export async function generateInvoiceJournalEntries(invoice: any) {
       });
     }
 
-    // 3. Credit Liability/Cash/Bank
-    entries.push({
-      invoiceId: invoice._id,
-      voucherNo,
-      date,
-      accountCode: liabilityCode,
-      accountTitle: liabilityTitle,
-      debit: 0,
-      credit: total,
-      remarks: `${invoice.type === "non_tax_purchase" ? "Non-Tax " : ""}Purchase invoice posted (${paymentMethod})`,
-      partyId: invoice.partyId || null
-    });
-
-    // 4. If Accounts Payable but amountReceived > 0, post payment
-    if (liabilityCode === "2100" && invoice.amountReceived > 0) {
-      const payMethod = invoice.paymentMethod === "Bank" ? "1110" : "1111";
-      const payTitle = invoice.paymentMethod === "Bank" ? "Bank" : "Cash";
-      entries.push({
-        invoiceId: invoice._id,
-        voucherNo,
-        date,
-        accountCode: "2100",
-        accountTitle: "Accounts Payable",
-        debit: invoice.amountReceived,
-        credit: 0,
-        remarks: `Payment made at purchase`,
-        partyId: invoice.partyId || null
-      });
+    // 4. Credit Paid Portion (Cash or Bank)
+    if (paidPortion > 0) {
+      const payMethod = (paymentMethod === "Bank" || invoice.paymentMethod === "Bank") ? "1110" : "1111";
+      const payTitle = (paymentMethod === "Bank" || invoice.paymentMethod === "Bank") ? "Bank" : "Cash";
       entries.push({
         invoiceId: invoice._id,
         voucherNo,
@@ -383,9 +408,24 @@ export async function generateInvoiceJournalEntries(invoice: any) {
         accountCode: payMethod,
         accountTitle: payTitle,
         debit: 0,
-        credit: invoice.amountReceived,
-        remarks: `Payment made at purchase`,
+        credit: paidPortion,
+        remarks: `Payment made at purchase (${payTitle})`,
         partyId: null
+      });
+    }
+
+    // 5. Credit Unpaid Portion (Accounts Payable)
+    if (unpaidPortion > 0) {
+      entries.push({
+        invoiceId: invoice._id,
+        voucherNo,
+        date,
+        accountCode: "2100",
+        accountTitle: "Accounts Payable",
+        debit: 0,
+        credit: unpaidPortion,
+        remarks: `Purchase invoice posted (Credit)`,
+        partyId: invoice.partyId || null
       });
     }
 
