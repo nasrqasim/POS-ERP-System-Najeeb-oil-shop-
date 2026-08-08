@@ -19,6 +19,7 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
     name: item?.name || "",
     mainCategoryId: item?.mainCategoryId || "",
     subCategoryId: item?.subCategoryId || "",
+    unit: item?.unit || "Liter",
     litersInCtn: item?.litersInCtn || 0,
     gallonsInCtn: item?.gallonsInCtn || 0,
     purchaseRate: item?.purchaseRate || 0,
@@ -44,6 +45,7 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
         name: item.name || "",
         mainCategoryId: item.mainCategoryId || "",
         subCategoryId: item.subCategoryId || "",
+        unit: item.unit || "Liter",
         litersInCtn: item.litersInCtn || 0,
         gallonsInCtn: item.gallonsInCtn || 0,
         purchaseRate: item.purchaseRate || 0,
@@ -59,6 +61,7 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
         name: "",
         mainCategoryId: "",
         subCategoryId: "",
+        unit: "Liter",
         litersInCtn: 0,
         gallonsInCtn: 0,
         purchaseRate: 0,
@@ -147,6 +150,20 @@ export default function ItemModal({ isOpen, onClose, item, onSave }: ItemModalPr
             >
               <option value="">Select Category</option>
               {mainCats.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">Unit of Measure *</label>
+            <select
+              value={formData.unit}
+              onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm font-bold dark:text-white outline-none"
+              required
+            >
+              <option value="Liter">Liter</option>
+              <option value="KG">KG</option>
+              <option value="Piece">Piece</option>
+              <option value="Carton">Carton</option>
             </select>
           </div>
           <div className="space-y-2">

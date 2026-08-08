@@ -148,11 +148,12 @@ export default function ItemsPage() {
   const columns = [
     { header: "Code", accessor: "code" },
     { header: "Item Name", accessor: "name" },
+    { header: "Unit", accessor: "unit", render: (val: string) => <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-black uppercase tracking-wider">{val || "Liter"}</span> },
     { header: "Purchase Rate", accessor: "purchaseRate", render: (val: number) => <span className="font-bold">Rs.{(val||0).toLocaleString()}</span> },
     { header: "Retail Rate", accessor: "retailRate", render: (val: number) => <span className="font-bold">Rs.{(val||0).toLocaleString()}</span> },
-    { header: "Stock (Ctns)", accessor: "stockQtyCartons", render: (val: number, row: any) => (
+    { header: "Stock Qty", accessor: "stockQtyCartons", render: (val: number, row: any) => (
       <span className={`font-bold ${(val||0) < (row.reorderLevel||5) ? "text-red-500" : "text-slate-900 dark:text-white"}`}>
-        {val||0}
+        {val||0} {row.unit || "Liter"}
       </span>
     )},
   ];

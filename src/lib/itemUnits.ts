@@ -2,6 +2,7 @@
 
 export type PackItem = {
   name?: string;
+  unit?: string;
   gallonsInCtn?: number;
   litersInCtn?: number;
 } | null | undefined;
@@ -12,6 +13,21 @@ export type UnitLine = {
   liters?: number | string;
   entryUnit?: "cartons" | "gallons" | "liters";
 };
+
+export function getItemPrimaryUnit(item?: PackItem): "Liter" | "KG" | "Piece" | "Carton" {
+  const u = String(item?.unit || "").trim();
+  if (["KG", "Kg", "kg"].includes(u)) return "KG";
+  if (["Piece", "Pcs", "PC", "pc"].includes(u)) return "Piece";
+  if (["Carton", "Ctn", "CTN"].includes(u)) return "Carton";
+  return "Liter";
+}
+
+export function formatItemQtyWithUnit(qty: number | string, item?: PackItem): string {
+  const primaryUnit = getItemPrimaryUnit(item);
+  const num = Number(qty) || 0;
+  const val = Number.isInteger(num) ? num.toString() : num.toFixed(2).replace(/\.?0+$/, "");
+  return `${val} ${primaryUnit}`;
+}
 
 export type PackSizes = { gallonsInCtn: number; litersInCtn: number };
 
@@ -212,10 +228,19 @@ export function formatReceiptLineQty(
   line: UnitLine,
   item?: PackItem
 ): ReceiptQtyDisplay {
+  const primaryUnit = getItemPrimaryUnit(item);
   const cartons = roundUnit(line.cartons);
   const gallons = roundUnit(line.gallons);
   const liters = roundUnit(line.liters);
   const entryUnit = line.entryUnit;
+
+  if (primaryUnit === "Piece" || primaryUnit === "KG") {
+    const qty = cartons || gallons || liters || 1;
+    return {
+      qtyLabel: `${formatQtyDisplay(qty)} ${primaryUnit === "Piece" ? "Pcs" : "KG"}`,
+      equivalentLabel: "",
+    };
+  }
 
   if (entryUnit === "gallons" && gallons > 0) {
     return {
@@ -231,8 +256,8 @@ export function formatReceiptLineQty(
   }
   if (cartons > 0) {
     return {
-      qtyLabel: `${formatQtyDisplay(cartons)} Cartons`,
-      equivalentLabel: `${formatQtyDisplay(gallons)} Gallons / ${formatQtyDisplay(liters)} Litres`,
+      qtyLabel: `${formatQtyDisplay(cartons)} ${primaryUnit === "Carton" ? "Cartons" : "Cartons"}`,
+      equivalentLabel: (gallons > 0 || liters > 0) ? `${formatQtyDisplay(gallons)} Gallons / ${formatQtyDisplay(liters)} Litres` : "",
     };
   }
   if (gallons > 0) {

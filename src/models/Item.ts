@@ -6,6 +6,7 @@ const ItemSchema = new Schema(
     name: { type: String, required: true },
     mainCategoryId: { type: Schema.Types.ObjectId, ref: "Category", required: false },
     subCategoryId: { type: Schema.Types.ObjectId, ref: "Category", required: false },
+    unit: { type: String, enum: ["Liter", "KG", "Piece", "Carton"], default: "Liter" },
     litersInCtn: { type: Number, default: 0 },
     gallonsInCtn: { type: Number, default: 0 },
     purchaseRate: { type: Number, default: 0 },
