@@ -302,8 +302,8 @@ export default function PurchaseInvoicePage() {
                           <Edit size={16} />
                         </button>
                         <button 
-                          onClick={printPage}
-                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-all" title="Print"
+                          onClick={() => setViewOrder(inv)}
+                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-all" title="Print Invoice"
                         >
                           <Printer size={16} />
                         </button>

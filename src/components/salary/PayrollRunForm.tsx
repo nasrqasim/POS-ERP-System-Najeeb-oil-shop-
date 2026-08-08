@@ -131,21 +131,67 @@ export default function PayrollRunForm({ onClose, initialData }: any) {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Staff</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-right">Basic Salary</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-right">Net Salary</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Staff Name</th>
+                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Basic Salary</th>
+                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Allowances</th>
+                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Deductions</th>
+                      <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-28 text-right">Advances/Loans</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-right">Net Payable</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-bold">
-                    {staff.map((s, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-slate-900 dark:text-white">{s.name || employees.find(e => e._id === s.employeeId)?.name}</div>
-                        </td>
-                        <td className="px-6 py-4 text-right text-sm text-slate-600">{(s.basicSalary||0).toLocaleString()}</td>
-                        <td className="px-6 py-4 text-right text-sm text-slate-900 dark:text-white">{(s.netSalary||0).toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {staff.map((s, idx) => {
+                      const updateStaffRow = (field: string, val: number) => {
+                        const updated = [...staff];
+                        const current = { ...updated[idx], [field]: val };
+                        current.netSalary = Math.max(0, (current.basicSalary || 0) + (current.allowances || 0) - (current.deductions || 0) - (current.advances || 0) - (current.loans || 0));
+                        updated[idx] = current;
+                        setStaff(updated);
+                      };
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-slate-900 dark:text-white">{s.name || employees.find(e => e._id === s.employeeId)?.name}</div>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <input
+                              type="number"
+                              value={s.basicSalary}
+                              onChange={(e) => updateStaffRow("basicSalary", parseFloat(e.target.value) || 0)}
+                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none"
+                            />
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <input
+                              type="number"
+                              value={s.allowances}
+                              onChange={(e) => updateStaffRow("allowances", parseFloat(e.target.value) || 0)}
+                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-emerald-600"
+                            />
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <input
+                              type="number"
+                              value={s.deductions}
+                              onChange={(e) => updateStaffRow("deductions", parseFloat(e.target.value) || 0)}
+                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-rose-600"
+                            />
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <input
+                              type="number"
+                              value={s.advances}
+                              onChange={(e) => updateStaffRow("advances", parseFloat(e.target.value) || 0)}
+                              className="w-full text-right bg-transparent text-sm font-bold border-b border-transparent focus:border-maroon-800 outline-none text-amber-600"
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white">
+                            PKR {(s.netSalary || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

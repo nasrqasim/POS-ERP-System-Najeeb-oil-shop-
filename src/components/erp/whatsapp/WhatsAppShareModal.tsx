@@ -223,13 +223,19 @@ Thank you.`;
         }
       }
 
-      // Open WhatsApp App link (mobile) or WhatsApp Web (desktop)
-      const url = isMobile 
-        ? `whatsapp://send?phone=${cleanPhone}&text=${encodedMsg}`
-        : `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+      // Deep link directly into WhatsApp App on both laptop (WhatsApp Desktop app) and mobile devices
+      const appUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedMsg}`;
+      const webUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
 
-      // Open using a named tab on desktop to reuse the session and avoid duplicate tabs
-      window.open(url, isMobile ? "_blank" : "erp_whatsapp_window");
+      // Open WhatsApp app protocol directly
+      window.location.href = appUrl;
+      
+      // Fallback: If desktop app isn't registered, open web after brief delay
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.open(webUrl, "erp_whatsapp_window");
+        }
+      }, 1500);
       
       setStatus("success");
       setTimeout(() => {

@@ -99,6 +99,18 @@ export async function GET(req: Request) {
       totalCogs += qtyOut * (item.purchaseRate || 0);
     });
 
+    // 1. Calculate Revenue from Invoices & Income Accounts
+    const SALE_TYPES = new Set(["sale", "non_tax_sale", "pos", "pos_counter_sale"]);
+    const SALE_RETURN_TYPES = new Set(["sale_return", "non_tax_sale_return"]);
+
+    let salesInvoiceRevenue = 0;
+    invoices.forEach(inv => {
+      const invType = String(inv.type || "");
+      const amt = Number(inv.totalAmount || inv.total || inv.netAmount || 0);
+      if (SALE_TYPES.has(invType)) salesInvoiceRevenue += amt;
+      if (SALE_RETURN_TYPES.has(invType)) salesInvoiceRevenue -= amt;
+    });
+
     const report = {
       revenue: [] as any[],
       expenses: [] as any[],
@@ -107,7 +119,12 @@ export async function GET(req: Request) {
       netProfit: 0
     };
 
-    // First grab titles from Journal Entries in case they aren't in Account collection
+    if (salesInvoiceRevenue > 0) {
+      report.revenue.push({ title: "Sales Revenue", amount: salesInvoiceRevenue });
+      report.totalRevenue += salesInvoiceRevenue;
+    }
+
+    // Grab income / expense balances from Journal Entry
     const journalTitles = await JournalEntry.aggregate([
       { $match: match },
       { $group: { _id: "$accountCode", title: { $first: "$accountTitle" } } }
@@ -115,17 +132,16 @@ export async function GET(req: Request) {
     const titleMap = new Map(journalTitles.map((t: any) => [t._id, t.title]));
 
     balanceMap.forEach((journal, code) => {
-      // Skip Purchases (code 5100) since we replace it with COGS
-      if (code === "5100") return;
+      // Skip Purchases (5100) and Sales (4100) since we compute sales & COGS dynamically from invoices
+      if (code === "5100" || code === "4100") return;
 
       const acc = accountMap.get(code);
       let type = acc ? acc.type.toLowerCase() : "";
       
-      // Infer type if missing or not an account
       if (!type) {
          if (code.startsWith("4")) type = "income";
          else if (code.startsWith("5")) type = "expense";
-         else return; // Ignore assets/liabilities
+         else return;
       } else if (type === "revenue") {
          type = "income";
       }
@@ -147,7 +163,7 @@ export async function GET(req: Request) {
       }
     });
 
-    // Add COGS to expenses if it is non-zero
+    // Add COGS to expenses if non-zero
     if (totalCogs > 0) {
       report.expenses.push({ title: "Cost of Goods Sold (COGS)", amount: totalCogs });
       report.totalExpenses += totalCogs;
