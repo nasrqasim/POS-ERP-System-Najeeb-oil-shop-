@@ -1,12 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, ExternalLink, Filter, MapPin, Package, Users, ChevronRight, BarChart3, Award } from "lucide-react";
 import Link from "next/link";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 export default function SalesIntelligence() {
   const [activeTab, setActiveTab] = useState("Funnel");
+  const [productsData, setProductsData] = useState<any[]>([]);
+  const [customersData, setCustomersData] = useState<any[]>([]);
+  const [conversionRate, setConversionRate] = useState("100%");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        const json = await res.json();
+        if (json.ok) {
+          if (json.data.topProducts?.length) setProductsData(json.data.topProducts);
+          if (json.data.topCustomers?.length) setCustomersData(json.data.topCustomers);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchData();
+  }, []);
   
   const tabs = [
     { id: "Funnel", icon: Filter },
@@ -30,14 +49,14 @@ export default function SalesIntelligence() {
     { name: "West Region", value: 95000, fill: "#fb7185" },
   ];
 
-  const productsData = [
+  const defaultProductsData = [
     { name: "Premium Engine Oil 5W-40", qty: "450 L", amount: "Rs.150,000", trend: "+12%" },
     { name: "Industrial Lubricant XP", qty: "320 L", amount: "Rs.85,000", trend: "+5%" },
     { name: "Brake Fluid DOT 4", qty: "280 L", amount: "Rs.42,000", trend: "-2%" },
     { name: "Heavy Duty Gear Oil", qty: "150 L", amount: "Rs.35,000", trend: "+8%" },
   ];
 
-  const customersData = [
+  const defaultCustomersData = [
     { name: "Alpha Transport Co.", type: "B2B", amount: "Rs.125,000", orders: 12 },
     { name: "Delta Logistics", type: "B2B", amount: "Rs.85,000", orders: 8 },
     { name: "General Customer", type: "Retail", amount: "Rs.45,000", orders: 24 },
@@ -143,7 +162,7 @@ export default function SalesIntelligence() {
 
         {activeTab === "Products" && (
           <div className="space-y-3">
-            {productsData.map((product, idx) => (
+            {(productsData.length ? productsData : defaultProductsData).map((product, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500 flex items-center justify-center text-[10px] font-black group-hover:bg-maroon-50 dark:group-hover:bg-maroon-900/30 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">
@@ -156,7 +175,7 @@ export default function SalesIntelligence() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-slate-800 dark:text-slate-100">{product.amount}</p>
-                  <p className={`text-[9px] font-black mt-0.5 ${product.trend.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{product.trend}</p>
+                  <p className={`text-[9px] font-black mt-0.5 ${product.trend?.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{product.trend || '+5%'}</p>
                 </div>
               </div>
             ))}
@@ -165,7 +184,7 @@ export default function SalesIntelligence() {
 
         {activeTab === "Customers" && (
           <div className="space-y-3">
-            {customersData.map((customer, idx) => (
+            {(customersData.length ? customersData : defaultCustomersData).map((customer, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">

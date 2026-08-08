@@ -1,27 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Banknote, ExternalLink, ArrowUpRight, ArrowDownLeft, TrendingUp, ArrowRightLeft, Calendar } from "lucide-react";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 export default function CashFlowManagement() {
   const [activeTab, setActiveTab] = useState("Flow");
-  
-  const tabs = [
-    { id: "Flow", icon: ArrowRightLeft },
-    { id: "Payables", icon: ArrowUpRight },
-    { id: "Receivables", icon: ArrowDownLeft },
-    { id: "Forecast", icon: TrendingUp }
-  ];
-
-  const flowData = [
+  const [flowData, setFlowData] = useState<any[]>([
     { month: 'Jan', inflow: 450000, outflow: 380000 },
     { month: 'Feb', inflow: 520000, outflow: 410000 },
     { month: 'Mar', inflow: 480000, outflow: 450000 },
     { month: 'Apr', inflow: 610000, outflow: 390000 },
     { month: 'May', inflow: 590000, outflow: 420000 },
     { month: 'Jun', inflow: 650000, outflow: 480000 },
+  ]);
+
+  useEffect(() => {
+    const fetchFlow = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        const json = await res.json();
+        if (json.ok && json.data.flowData?.length) {
+          setFlowData(json.data.flowData);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchFlow();
+  }, []);
+
+  const tabs = [
+    { id: "Flow", icon: ArrowRightLeft },
+    { id: "Payables", icon: ArrowUpRight },
+    { id: "Receivables", icon: ArrowDownLeft },
+    { id: "Forecast", icon: TrendingUp }
   ];
 
   const payablesData = [

@@ -1,24 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Box, ExternalLink, AlertTriangle, MapPin, Package, TrendingDown, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 export default function InventoryIntelligence() {
   const [activeTab, setActiveTab] = useState("Overview");
-  
-  const tabs = [
-    { id: "Overview", icon: Box },
-    { id: "Alerts", icon: AlertTriangle },
-    { id: "Locations", icon: MapPin }
-  ];
-
-  const categoryData = [
+  const [categoryData, setCategoryData] = useState<any[]>([
     { name: 'Engine Oils', value: 450000, color: '#881337' },
     { name: 'Transmission Fluids', value: 250000, color: '#be123c' },
     { name: 'Industrial Lubes', value: 150000, color: '#e11d48' },
     { name: 'Greases & Specs', value: 85000, color: '#fb7185' },
+  ]);
+
+  useEffect(() => {
+    const fetchInv = async () => {
+      try {
+        const res = await fetch("/api/dashboard");
+        const json = await res.json();
+        if (json.ok && json.data.categoryData?.length) {
+          setCategoryData(json.data.categoryData);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchInv();
+  }, []);
+
+  const tabs = [
+    { id: "Overview", icon: Box },
+    { id: "Alerts", icon: AlertTriangle },
+    { id: "Locations", icon: MapPin }
   ];
 
   const agingData = [

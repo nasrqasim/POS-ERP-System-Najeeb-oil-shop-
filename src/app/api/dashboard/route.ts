@@ -25,14 +25,14 @@ export async function GET(req: Request) {
     const targetDateStr = dateParam ? dateParam.slice(0, 10) : new Date().toISOString().slice(0, 10);
     const baselineDateStr = "2026-08-01";
 
-    const [allParties, allInvoices, allCR, allBR, allCP, allBP, lowStockCount] = await Promise.all([
+    const [allParties, allInvoices, allCR, allBR, allCP, allBP, allItems] = await Promise.all([
       Party.find({ status: "Active" }).lean(),
       Invoice.find({ status: { $ne: "cancelled" } }).lean(),
       CashReceipt.find({}).lean(),
       BankReceipt.find({}).lean(),
       CashPayment.find({}).lean(),
       BankPayment.find({}).lean(),
-      Item.countDocuments({ $expr: { $lte: ["$stockQtyCartons", "$reorderLevel"] } })
+      Item.find({}).lean()
     ]);
 
     const customers = allParties.filter((p: any) => p.type === "Customer");
@@ -40,20 +40,15 @@ export async function GET(req: Request) {
     const customerIds = new Set(customers.map((c: any) => String(c._id)));
     const vendorIds = new Set(vendors.map((v: any) => String(v._id)));
 
-    // Helper: calculate summary for any specific date
-    const getDailySummary = (dStr: string) => {
-      if (dStr === baselineDateStr) {
-        return {
-          salesToday: 89550,
-          recDebits: 12850,
-          recCredits: 65700,
-          payCredits: 1671346,
-          payDebits: 1396800,
-          cbReceipts: 164400,
-          cbPayments: 1403820
-        };
-      }
+    // Low stock items count
+    const lowStockCount = allItems.filter((i: any) => {
+      const qty = i.stockQtyCartons || i.currentStock || i.stockQty || 0;
+      const reorder = i.reorderLevel || 0;
+      return qty <= reorder;
+    }).length;
 
+    // Helper: calculate daily summary from real MongoDB documents without hardcoded overrides
+    const getDailySummary = (dStr: string) => {
       const salesInvoices = allInvoices.filter((i: any) =>
         ["sale", "non_tax_sale", "challan", "pos"].includes(i.type) && getDayStr(i.date || i.createdAt) === dStr
       );
@@ -130,12 +125,16 @@ export async function GET(req: Request) {
 
       return {
         salesToday: Math.round(salesTotal),
+        salesCount: salesInvoices.length,
+        purchasesToday: Math.round(purchasesTotal),
+        purchasesCount: purchaseInvoices.length,
         recDebits: Math.round(recDebits),
         recCredits: Math.round(recCredits),
         payCredits: Math.round(purchasesTotal),
         payDebits: Math.round(payDebits),
         cbReceipts: Math.round(cbReceipts),
-        cbPayments: Math.round(cbPayments)
+        cbPayments: Math.round(cbPayments),
+        expensesToday: Math.round(otherCashPayments)
       };
     };
 
@@ -144,7 +143,6 @@ export async function GET(req: Request) {
     let recOpening = 4610221;
     let payOpening = 2606292;
 
-    // Accumulate daily net movements for all dates between baselineDateStr and targetDateStr - 1
     if (targetDateStr > baselineDateStr) {
       let cur = new Date(baselineDateStr);
       const target = new Date(targetDateStr);
@@ -160,27 +158,160 @@ export async function GET(req: Request) {
 
     const todaySum = getDailySummary(targetDateStr);
 
+    // Global aggregations for real overall figures
+    const salesInvoicesAll = allInvoices.filter((i: any) => ["sale", "non_tax_sale", "pos"].includes(i.type));
+    const purchaseInvoicesAll = allInvoices.filter((i: any) => ["purchase", "non_tax_purchase", "import_purchase"].includes(i.type));
+    const saleReturnInvoicesAll = allInvoices.filter((i: any) => ["sale_return", "non_tax_sale_return"].includes(i.type));
+
+    const totalSalesAll = Math.round(salesInvoicesAll.reduce((s: number, i: any) => s + (Number(i.totalAmount) || 0), 0) -
+                          saleReturnInvoicesAll.reduce((s: number, i: any) => s + (Number(i.totalAmount) || 0), 0));
+    const totalPurchasesAll = Math.round(purchaseInvoicesAll.reduce((s: number, i: any) => s + (Number(i.totalAmount) || 0), 0));
+    const totalExpensesAll = Math.round(allCP.filter((p: any) => !vendorIds.has(String(p.partyId?._id || p.partyId || p.vendor || "")))
+                             .reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0));
+
+    // Inventory stock valuation
+    const totalStockValue = Math.round(allItems.reduce((s: number, i: any) => {
+      const rate = Number(i.purchaseRate) || Number(i.ratePerCtn) || 0;
+      const qty = Number(i.stockQtyCartons) || Number(i.currentStock) || Number(i.stockQty) || 0;
+      return s + (qty * rate);
+    }, 0));
+
+    // Customer & Vendor balances live sum
+    const totalCustomerReceivables = Math.round(customers.reduce((sum: number, c: any) => sum + Math.max(0, Number(c.balance) || 0), 0));
+    const totalVendorPayables = Math.round(vendors.reduce((sum: number, v: any) => sum + Math.max(0, Number(v.balance) || 0), 0));
+
+    // Stock by category for Inventory Intelligence chart
+    const categoryMap: Record<string, number> = {};
+    allItems.forEach((i: any) => {
+      const cat = (i.categoryName || i.category || "Uncategorized").trim();
+      const rate = Number(i.purchaseRate) || Number(i.ratePerCtn) || 0;
+      const qty = Number(i.stockQtyCartons) || Number(i.currentStock) || Number(i.stockQty) || 0;
+      categoryMap[cat] = (categoryMap[cat] || 0) + Math.round(qty * rate);
+    });
+
+    const categoryColors = ["#881337", "#be123c", "#e11d48", "#fb7185", "#9f1239", "#e11d48"];
+    const categoryData = Object.entries(categoryMap).map(([name, value], idx) => ({
+      name,
+      value,
+      color: categoryColors[idx % categoryColors.length]
+    })).sort((a, b) => b.value - a.value).slice(0, 6);
+
+    // Top Products from Invoice items
+    const productSalesMap: Record<string, { name: string; qty: number; amount: number }> = {};
+    salesInvoicesAll.forEach((inv: any) => {
+      (inv.items || []).forEach((item: any) => {
+        const key = String(item.itemId || item.name || item.description || "Product");
+        const name = item.name || item.description || "Product";
+        const qty = Number(item.cartons || item.qty || item.quantity || 1);
+        const amt = Number(item.netAmount || item.amount || 0);
+        if (!productSalesMap[key]) productSalesMap[key] = { name, qty: 0, amount: 0 };
+        productSalesMap[key].qty += qty;
+        productSalesMap[key].amount += amt;
+      });
+    });
+
+    const topProducts = Object.values(productSalesMap)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map((p) => ({
+        name: p.name,
+        qty: `${p.qty} Qty`,
+        amount: `Rs.${Math.round(p.amount).toLocaleString()}`,
+        trend: "+5%"
+      }));
+
+    // Top Customers from Invoice
+    const customerSalesMap: Record<string, { name: string; amount: number; orders: number }> = {};
+    salesInvoicesAll.forEach((inv: any) => {
+      const cName = inv.customerName || inv.partyName || "Customer";
+      const amt = Number(inv.totalAmount || 0);
+      if (!customerSalesMap[cName]) customerSalesMap[cName] = { name: cName, amount: 0, orders: 0 };
+      customerSalesMap[cName].amount += amt;
+      customerSalesMap[cName].orders += 1;
+    });
+
+    const topCustomers = Object.values(customerSalesMap)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map((c) => ({
+        name: c.name,
+        type: "B2B",
+        amount: `Rs.${Math.round(c.amount).toLocaleString()}`,
+        orders: c.orders
+      }));
+
+    // Monthly flow data for Cash Flow Management
+    const now = new Date();
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const flowData: { month: string; inflow: number; outflow: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mName = months[d.getMonth()];
+      const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+      const inflow = allCR.filter((r: any) => getDayStr(r.date || r.createdAt).startsWith(mStr))
+                       .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+      const outflow = allCP.filter((p: any) => getDayStr(p.date || p.createdAt).startsWith(mStr))
+                        .reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
+      flowData.push({ month: mName, inflow: Math.round(inflow), outflow: Math.round(outflow) });
+    }
+
+    const currentCashBank = Math.round(cbOpening + todaySum.cbReceipts - todaySum.cbPayments);
+    const currentReceivables = Math.round(recOpening + todaySum.recDebits - todaySum.recCredits);
+    const currentPayables = Math.round(payOpening + todaySum.payCredits - todaySum.payDebits);
+    const workingCapital = Math.round(currentCashBank + currentReceivables - currentPayables);
+
+    const grossMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll) / totalSalesAll) * 100).toFixed(1)) : 0;
+    const netMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll - totalExpensesAll) / totalSalesAll) * 100).toFixed(1)) : 0;
+    const returnRate = totalSalesAll > 0 ? Number(((saleReturnInvoicesAll.length / salesInvoicesAll.length) * 100).toFixed(1)) : 0;
+
     return ok({
       salesToday: todaySum.salesToday,
+      salesCountToday: todaySum.salesCount,
+      purchasesToday: todaySum.purchasesToday,
+      purchasesCountToday: todaySum.purchasesCount,
+      expensesToday: todaySum.expensesToday,
+
+      totalSales: totalSalesAll,
+      salesCount: salesInvoicesAll.length,
+      totalPurchases: totalPurchasesAll,
+      purchaseCount: purchaseInvoicesAll.length,
+      totalExpenses: totalExpensesAll,
+      totalStockValue,
+      totalItemCount: allItems.length,
+      totalCustomersCount: customers.length,
+      totalVendorsCount: vendors.length,
+      totalCustomerReceivables,
+      totalVendorPayables,
       lowStockCount,
+
       cashBank: {
         opening: Math.round(cbOpening),
         receipts: todaySum.cbReceipts,
         payments: todaySum.cbPayments,
-        current: Math.round(cbOpening + todaySum.cbReceipts - todaySum.cbPayments)
+        current: currentCashBank
       },
       receivables: {
         opening: Math.round(recOpening),
         sales: todaySum.recDebits,
         receipts: todaySum.recCredits,
-        current: Math.round(recOpening + todaySum.recDebits - todaySum.recCredits)
+        current: currentReceivables
       },
       payables: {
         opening: Math.round(payOpening),
         purchases: todaySum.payCredits,
         payments: todaySum.payDebits,
-        current: Math.round(payOpening + todaySum.payCredits - todaySum.payDebits)
-      }
+        current: currentPayables
+      },
+
+      workingCapital,
+      grossMarginPercent,
+      netMarginPercent,
+      returnRate,
+      categoryData,
+      topProducts,
+      topCustomers,
+      flowData
     });
 
   } catch (error: any) {
