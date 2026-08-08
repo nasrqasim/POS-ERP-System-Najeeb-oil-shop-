@@ -125,17 +125,17 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className={circleTrack} />
                   <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent"
-                    strokeDasharray="226" strokeDashoffset="115"
-                    className="text-amber-400 transition-all duration-1000"
+                    strokeDasharray="226" strokeDashoffset="25"
+                    className="text-emerald-400 transition-all duration-1000"
                   />
                 </svg>
-                <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-white">
-                  48
+                <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-white">
+                  89%
                 </div>
               </div>
               <div>
                 <p className={`text-xs font-medium uppercase ${mutedText}`}>Business Health</p>
-                <h3 className="text-xl font-black text-amber-400">Fair</h3>
+                <h3 className="text-xl font-black text-emerald-400">Excellent</h3>
               </div>
             </div>
 
@@ -145,7 +145,7 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-sm font-black text-slate-800 dark:text-white">Health Score Breakdown</span>
-                  <span className="text-sm font-black text-amber-500">48/100</span>
+                  <span className="text-sm font-black text-emerald-500">89/100</span>
                 </div>
                 {/* Metrics Table */}
                 <div className="p-4">
