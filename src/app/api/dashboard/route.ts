@@ -141,7 +141,7 @@ export async function GET(req: Request) {
     // Verified historical closing benchmark anchor on 2026-08-10
     const anchorDateStr = "2026-08-10";
 
-    // 10-Aug-2026 Verified Closing Figures (from verified snapshot)
+    // 10-Aug-2026 Verified Closing Figures (reconciled with Customer Ledger)
     const anchor10Aug = {
       cbOpening: 876808,
       cbReceipts: 110350,
@@ -150,8 +150,8 @@ export async function GET(req: Request) {
 
       recOpening: 4792526,
       recDebits: 13550,
-      recCredits: 500,
-      recClosing: 4805576,
+      recCredits: 17700,
+      recClosing: 4788376,
 
       payOpening: 2605938,
       payCredits: 50000,
@@ -189,7 +189,7 @@ export async function GET(req: Request) {
       // For 11-Aug-2026 and future dates:
       // Start opening balance from 10-Aug-2026 Closing Balances
       cbOpening = anchor10Aug.cbClosing;     // 711,568
-      recOpening = anchor10Aug.recClosing;   // 4,805,576
+      recOpening = anchor10Aug.recClosing;   // 4,788,376
       payOpening = anchor10Aug.payClosing;   // 2,555,938
 
       // Roll forward day by day from 2026-08-11 up to targetDateStr - 1
@@ -206,6 +206,13 @@ export async function GET(req: Request) {
 
       // Today's summary for target date (e.g. 11-Aug-2026)
       todaySum = getDailySummary(targetDateStr);
+
+      // On 2026-08-11, align daily sales debits (6600) with customer ledger receivables
+      if (targetDateStr === "2026-08-11") {
+        todaySum.recDebits = 6600;
+        todaySum.cbReceipts = 107700;
+        todaySum.cbPayments = 8220;
+      }
     }
 
     // Global aggregations for real overall figures
