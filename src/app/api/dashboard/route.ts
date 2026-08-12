@@ -97,6 +97,25 @@ export async function GET(req: Request) {
         if (customerIds.has(pid) && getDayStr(r.date || r.createdAt) === dStr) recCredits += Number(r.amount) || 0;
       });
 
+      let creditPurchases = 0;
+      let cashPurchasesPaid = 0;
+      purchaseInvoices.forEach((i: any) => {
+        const total = Number(i.totalAmount) || 0;
+        const method = (i.paymentMethod || i.paymentTerms || "").toLowerCase();
+        const isCredit = method.includes("credit") || i.isCreditBill || i.isOnCredit;
+        
+        let paidAtCreation = 0;
+        if (isCredit) {
+          paidAtCreation = Number(i.amountPaid) > 0 ? Number(i.amountPaid) : (Number(i.amountReceived) > 0 ? Number(i.amountReceived) : 0);
+        } else {
+          const isPaid = i.paymentMethod === "Cash" || i.paymentMethod === "Bank" || i.status === "paid" || i.balance === 0;
+          paidAtCreation = isPaid ? total : ((Number(i.amountPaid) > 0 ? Number(i.amountPaid) : 0) || (Number(i.amountReceived) > 0 ? Number(i.amountReceived) : 0));
+        }
+
+        creditPurchases += Math.max(0, total - paidAtCreation);
+        cashPurchasesPaid += Math.min(total, paidAtCreation);
+      });
+
       let payDebits = 0;
       allCP.forEach((p: any) => {
         const pid = String(p.partyId?._id || p.partyId || p.vendor || "");
@@ -106,13 +125,6 @@ export async function GET(req: Request) {
         const pid = String(p.vendor || p.partyId || "");
         if (vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) payDebits += Number(p.amount) || 0;
       });
-      purchaseInvoices.forEach((i: any) => {
-        const total = Number(i.totalAmount) || 0;
-        const rawPaid = (Number(i.amountReceived) > 0 ? Number(i.amountReceived) : 0) ||
-                        (Number(i.amountPaid) > 0 ? Number(i.amountPaid) : 0) ||
-                        ((i.paymentMethod === "Cash" || i.paymentMethod === "Bank" || i.status === "paid" || i.balance === 0) ? total : 0);
-        if (rawPaid > 0 && payDebits === 0) payDebits += rawPaid;
-      });
 
       let otherCashPayments = 0;
       allCP.forEach((p: any) => {
@@ -121,7 +133,7 @@ export async function GET(req: Request) {
       });
 
       const cbReceipts = recCredits + cashSalesPaid;
-      const cbPayments = payDebits + otherCashPayments;
+      const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments;
 
       return {
         salesToday: Math.round(salesTotal),
@@ -130,7 +142,7 @@ export async function GET(req: Request) {
         purchasesCount: purchaseInvoices.length,
         recDebits: Math.round(recDebits),
         recCredits: Math.round(recCredits),
-        payCredits: Math.round(purchasesTotal),
+        payCredits: Math.round(creditPurchases),
         payDebits: Math.round(payDebits),
         cbReceipts: Math.round(cbReceipts),
         cbPayments: Math.round(cbPayments),
