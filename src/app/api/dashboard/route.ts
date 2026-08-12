@@ -165,10 +165,10 @@ export async function GET(req: Request) {
       recCredits: 17700,
       recClosing: 4788376,
 
-      payOpening: 2605938,
+      payOpening: 2609838,
       payCredits: 50000,
       payDebits: 100000,
-      payClosing: 2555938,
+      payClosing: 2559838,
 
       salesToday: 74400
     };
