@@ -23,18 +23,21 @@ export default function VouchersReportPage() {
         ]);
         
         const combined = [
-          ...(cp.data || []),
-          ...(cr.data || []),
-          ...(bp.data || []),
-          ...(br.data || []),
+          ...(cp.data || []).map((v: any) => ({ ...v, type: v.type || "Cash Payment", isPayment: true })),
+          ...(cr.data || []).map((v: any) => ({ ...v, type: v.type || "Cash Receipt", isReceipt: true })),
+          ...(bp.data || []).map((v: any) => ({ ...v, type: v.type || "Bank Payment", isPayment: true })),
+          ...(br.data || []).map((v: any) => ({ ...v, type: v.type || "Bank Receipt", isReceipt: true })),
         ].map(v => ({
           id: v._id,
           date: new Date(v.date || v.createdAt).toLocaleDateString(),
           docNo: v.voucherNo || v.docNo || "N/A",
-          type: v.type || "Voucher",
-          party: v.partyId?.name || v.partyName || "-",
+          type: v.type,
+          isPayment: Boolean(v.isPayment || (v.type && v.type.toLowerCase().includes("payment"))),
+          isReceipt: Boolean(v.isReceipt || (v.type && v.type.toLowerCase().includes("receipt"))),
+          party: v.partyId?.name || v.partyName || v.vendor || v.customer || "-",
           employee: v.employeeId?.name || "-",
-          amount: `Rs. ${(v.amount || 0).toLocaleString()}`,
+          rawAmount: Number(v.amount) || 0,
+          amount: `Rs. ${(Number(v.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
           status: v.status || "Posted"
         }));
 
@@ -48,12 +51,15 @@ export default function VouchersReportPage() {
     fetchData();
   }, []);
 
-  const totalAmount = data.reduce((acc, curr) => acc + (parseFloat(curr.amount.replace(/[^\d.]/g, '')) || 0), 0);
+  const totalAmount = data.reduce((acc, curr) => acc + (curr.rawAmount || 0), 0);
+  const totalPayments = data.filter(v => v.isPayment).reduce((acc, curr) => acc + (curr.rawAmount || 0), 0);
+  const totalReceipts = data.filter(v => v.isReceipt).reduce((acc, curr) => acc + (curr.rawAmount || 0), 0);
+
   const stats = [
     { title: "Total Vouchers", value: data.length.toString(), icon: FileText, iconColor: "text-rose-600", iconBg: "bg-rose-50" },
-    { title: "Total Payments", value: `Rs. ${data.filter(v => v.type.includes('Payment')).reduce((acc, curr) => acc + (parseFloat(curr.amount.replace(/[^\d.]/g, '')) || 0), 0).toLocaleString()}`, icon: ArrowUpRight, iconColor: "text-rose-600", iconBg: "bg-rose-50", valueColor: "text-rose-600" },
-    { title: "Total Receipts", value: `Rs. ${data.filter(v => v.type.includes('Receipt')).reduce((acc, curr) => acc + (parseFloat(curr.amount.replace(/[^\d.]/g, '')) || 0), 0).toLocaleString()}`, icon: ArrowDownLeft, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
-    { title: "Net Amount", value: `Rs. ${totalAmount.toLocaleString()}`, icon: DollarSign, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
+    { title: "Total Payments", value: `Rs. ${totalPayments.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: ArrowUpRight, iconColor: "text-rose-600", iconBg: "bg-rose-50", valueColor: "text-rose-600" },
+    { title: "Total Receipts", value: `Rs. ${totalReceipts.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: ArrowDownLeft, iconColor: "text-blue-600", iconBg: "bg-blue-50", valueColor: "text-blue-600" },
+    { title: "Net Amount", value: `Rs. ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: DollarSign, iconColor: "text-emerald-600", iconBg: "bg-emerald-50" },
   ];
 
   const Filters = (
