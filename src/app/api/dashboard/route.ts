@@ -87,6 +87,20 @@ export async function GET(req: Request) {
         cashSalesPaid += Math.min(total, paidAtCreation);
       });
 
+      // Include Customer Debit / Payment Vouchers for Customer Parties (e.g. CPV-00114 Atlas Oil Stecker 1,900)
+      allCP.forEach((p: any) => {
+        const pid = String(p.partyId?._id || p.partyId || p.vendor || p.customer || "");
+        if (customerIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) {
+          recDebits += Number(p.amount) || 0;
+        }
+      });
+      allBP.forEach((p: any) => {
+        const pid = String(p.partyId?._id || p.partyId || p.vendor || p.customer || "");
+        if (customerIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) {
+          recDebits += Number(p.amount) || 0;
+        }
+      });
+
       let recCredits = 0;
       allCR.forEach((r: any) => {
         const pid = String(r.partyId?._id || r.partyId || r.party || "");
