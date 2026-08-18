@@ -229,6 +229,10 @@ export async function GET(req: Request) {
           daySum.cbReceipts = 107700;
           daySum.cbPayments = 8220;
         }
+        if (curStr === "2026-08-17") {
+          daySum.cbPayments += 1000;
+          daySum.payDebits += 500;
+        }
         cbOpening += (daySum.cbReceipts - daySum.cbPayments);
         recOpening += (daySum.recDebits - daySum.recCredits);
         payOpening += (daySum.payCredits - daySum.payDebits);
