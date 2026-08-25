@@ -102,13 +102,16 @@ export async function GET(req: Request) {
       });
 
       let recCredits = 0;
+      let vendorReceipts = 0;
       allCR.forEach((r: any) => {
         const pid = String(r.partyId?._id || r.partyId || r.party || "");
         if (customerIds.has(pid) && getDayStr(r.date || r.createdAt) === dStr) recCredits += Number(r.amount) || 0;
+        if (vendorIds.has(pid) && getDayStr(r.date || r.createdAt) === dStr) vendorReceipts += Number(r.amount) || 0;
       });
       allBR.forEach((r: any) => {
         const pid = String(r.partyId?._id || r.partyId || r.party || "");
         if (customerIds.has(pid) && getDayStr(r.date || r.createdAt) === dStr) recCredits += Number(r.amount) || 0;
+        if (vendorIds.has(pid) && getDayStr(r.date || r.createdAt) === dStr) vendorReceipts += Number(r.amount) || 0;
       });
 
       let creditPurchases = 0;
@@ -146,7 +149,7 @@ export async function GET(req: Request) {
         if (!vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) otherCashPayments += Number(p.amount) || 0;
       });
 
-      const cbReceipts = recCredits + cashSalesPaid;
+      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts;
       const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments;
 
       return {
@@ -156,7 +159,7 @@ export async function GET(req: Request) {
         purchasesCount: purchaseInvoices.length,
         recDebits: Math.round(recDebits),
         recCredits: Math.round(recCredits),
-        payCredits: Math.round(creditPurchases),
+        payCredits: Math.round(creditPurchases + vendorReceipts),
         payDebits: Math.round(payDebits),
         cbReceipts: Math.round(cbReceipts),
         cbPayments: Math.round(cbPayments),
