@@ -7,6 +7,7 @@ import CashReceipt from "@/models/CashReceipt";
 import CashPayment from "@/models/CashPayment";
 import BankReceipt from "@/models/BankReceipt";
 import BankPayment from "@/models/BankPayment";
+import OtherIncome from "@/models/OtherIncome";
 
 function getDayStr(d: any) {
   if (!d) return "";
@@ -25,13 +26,14 @@ export async function GET(req: Request) {
     const targetDateStr = dateParam ? dateParam.slice(0, 10) : new Date().toISOString().slice(0, 10);
     const baselineDateStr = "2026-08-01";
 
-    const [allParties, allInvoices, allCR, allBR, allCP, allBP, allItems] = await Promise.all([
+    const [allParties, allInvoices, allCR, allBR, allCP, allBP, allOtherIncome, allItems] = await Promise.all([
       Party.find({ status: "Active" }).lean(),
       Invoice.find({ status: { $ne: "cancelled" } }).lean(),
       CashReceipt.find({}).lean(),
       BankReceipt.find({}).lean(),
       CashPayment.find({}).lean(),
       BankPayment.find({}).lean(),
+      OtherIncome.find({}).lean(),
       Item.find({}).lean()
     ]);
 
@@ -149,8 +151,30 @@ export async function GET(req: Request) {
         if (!vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) otherCashPayments += Number(p.amount) || 0;
       });
 
-      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts;
-      const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments;
+      let otherIncomeTotal = 0;
+      allOtherIncome.forEach((inc: any) => {
+        if (getDayStr(inc.date || inc.createdAt) === dStr) {
+          otherIncomeTotal += Number(inc.amount) || 0;
+        }
+      });
+
+      let returnCashRefunds = 0;
+      let returnCreditDebits = 0;
+      returnInvoices.forEach((r: any) => {
+        const total = Number(r.totalAmount) || 0;
+        const method = (r.paymentMethod || "").toLowerCase();
+        const isCash = method === "cash" || !r.partyId || r.customerName?.toLowerCase()?.includes("walk-in");
+        if (isCash) {
+          returnCashRefunds += total;
+        } else {
+          returnCreditDebits += total;
+        }
+      });
+
+      recDebits = Math.max(0, recDebits - returnCreditDebits);
+
+      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts + otherIncomeTotal;
+      const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments + returnCashRefunds;
 
       return {
         salesToday: Math.round(salesTotal),

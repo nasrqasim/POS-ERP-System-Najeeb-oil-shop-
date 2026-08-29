@@ -51,16 +51,23 @@ export default function OtherIncomePage() {
       const startOfMonthStr = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
       const startOfYearStr = `${new Date().getFullYear()}-01-01`;
 
-      const [dailyRes, monthlyRes, yearlyRes] = await Promise.all([
+      const [dailyRes, monthlyRes, yearlyRes] = await Promise.allSettled([
         fetch(`/api/reports/profit-loss?fromDate=${todayStr}&toDate=${todayStr}`).then(r => r.json()),
         fetch(`/api/reports/profit-loss?fromDate=${startOfMonthStr}&toDate=${todayStr}`).then(r => r.json()),
         fetch(`/api/reports/profit-loss?fromDate=${startOfYearStr}&toDate=${todayStr}`).then(r => r.json())
       ]);
 
+      const getVal = (res: PromiseSettledResult<any>) => {
+        if (res.status === "fulfilled" && res.value?.ok && res.value?.data) {
+          return Number(res.value.data.netProfit) || 0;
+        }
+        return 0;
+      };
+
       setProfits({
-        daily: dailyRes.ok ? dailyRes.data.netProfit : 0,
-        monthly: monthlyRes.ok ? monthlyRes.data.netProfit : 0,
-        yearly: yearlyRes.ok ? yearlyRes.data.netProfit : 0
+        daily: getVal(dailyRes),
+        monthly: getVal(monthlyRes),
+        yearly: getVal(yearlyRes)
       });
     } catch (e) {
       console.error("Failed to fetch profits:", e);
