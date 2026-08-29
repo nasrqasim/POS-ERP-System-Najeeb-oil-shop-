@@ -41,6 +41,7 @@ export async function GET(req: Request) {
     const vendors = allParties.filter((p: any) => p.type === "Vendor");
     const customerIds = new Set(customers.map((c: any) => String(c._id)));
     const vendorIds = new Set(vendors.map((v: any) => String(v._id)));
+    const partyMap = new Map(allParties.map((p: any) => [String(p._id), p]));
 
     // Low stock items count
     const lowStockCount = allItems.filter((i: any) => {
@@ -163,7 +164,9 @@ export async function GET(req: Request) {
       returnInvoices.forEach((r: any) => {
         const total = Number(r.totalAmount) || 0;
         const method = (r.paymentMethod || "").toLowerCase();
-        const isCash = method === "cash" || !r.partyId || r.customerName?.toLowerCase()?.includes("walk-in");
+        const party = partyMap.get(String(r.partyId?._id || r.partyId || ""));
+        const pName = (party?.name || r.customerName || "").toLowerCase();
+        const isCash = method === "cash" || !r.partyId || (pName.includes("walk-in") && !pName.includes("credit"));
         if (isCash) {
           returnCashRefunds += total;
         } else {
