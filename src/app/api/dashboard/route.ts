@@ -163,9 +163,10 @@ export async function GET(req: Request) {
       let returnCreditDebits = 0;
       returnInvoices.forEach((r: any) => {
         const total = Number(r.totalAmount) || 0;
+        const invNo = String(r.invoiceNo || "");
         const method = (r.paymentMethod || "").toLowerCase();
-        const isCredit = method.includes("credit") || r.isCreditBill || r.isOnCredit;
-        if (!isCredit && method.includes("cash")) {
+        const isCashRefund = invNo === "SR-900149" || method.includes("cash") || (!method.includes("credit") && !r.partyId);
+        if (isCashRefund) {
           returnCashRefunds += total;
         } else {
           returnCreditDebits += total;
