@@ -164,10 +164,8 @@ export async function GET(req: Request) {
       returnInvoices.forEach((r: any) => {
         const total = Number(r.totalAmount) || 0;
         const method = (r.paymentMethod || "").toLowerCase();
-        const party = partyMap.get(String(r.partyId?._id || r.partyId || ""));
-        const pName = (party?.name || r.customerName || "").toLowerCase();
-        const isCash = method === "cash" || !r.partyId || (pName.includes("walk-in") && !pName.includes("credit"));
-        if (isCash) {
+        const isCredit = method.includes("credit") || r.isCreditBill || r.isOnCredit;
+        if (!isCredit && method.includes("cash")) {
           returnCashRefunds += total;
         } else {
           returnCreditDebits += total;
