@@ -7,7 +7,6 @@ import CashReceipt from "@/models/CashReceipt";
 import CashPayment from "@/models/CashPayment";
 import BankReceipt from "@/models/BankReceipt";
 import BankPayment from "@/models/BankPayment";
-import OtherIncome from "@/models/OtherIncome";
 
 function getDayStr(d: any) {
   if (!d) return "";
@@ -26,14 +25,13 @@ export async function GET(req: Request) {
     const targetDateStr = dateParam ? dateParam.slice(0, 10) : new Date().toISOString().slice(0, 10);
     const baselineDateStr = "2026-08-01";
 
-    const [allParties, allInvoices, allCR, allBR, allCP, allBP, allOtherIncome, allItems] = await Promise.all([
+    const [allParties, allInvoices, allCR, allBR, allCP, allBP, allItems] = await Promise.all([
       Party.find({ status: "Active" }).lean(),
       Invoice.find({ status: { $ne: "cancelled" } }).lean(),
       CashReceipt.find({}).lean(),
       BankReceipt.find({}).lean(),
       CashPayment.find({}).lean(),
       BankPayment.find({}).lean(),
-      OtherIncome.find({}).lean(),
       Item.find({}).lean()
     ]);
 
@@ -41,7 +39,6 @@ export async function GET(req: Request) {
     const vendors = allParties.filter((p: any) => p.type === "Vendor");
     const customerIds = new Set(customers.map((c: any) => String(c._id)));
     const vendorIds = new Set(vendors.map((v: any) => String(v._id)));
-    const partyMap = new Map(allParties.map((p: any) => [String(p._id), p]));
 
     // Low stock items count
     const lowStockCount = allItems.filter((i: any) => {
@@ -152,31 +149,8 @@ export async function GET(req: Request) {
         if (!vendorIds.has(pid) && getDayStr(p.date || p.createdAt) === dStr) otherCashPayments += Number(p.amount) || 0;
       });
 
-      let otherIncomeTotal = 0;
-      allOtherIncome.forEach((inc: any) => {
-        if (getDayStr(inc.date || inc.createdAt) === dStr) {
-          otherIncomeTotal += Number(inc.amount) || 0;
-        }
-      });
-
-      let returnCashRefunds = 0;
-      let returnCreditDebits = 0;
-      returnInvoices.forEach((r: any) => {
-        const total = Number(r.totalAmount) || 0;
-        const invNo = String(r.invoiceNo || "");
-        const method = (r.paymentMethod || "").toLowerCase();
-        const isCashRefund = invNo === "SR-900149" || method.includes("cash") || (!method.includes("credit") && !r.partyId);
-        if (isCashRefund) {
-          returnCashRefunds += total;
-        } else {
-          returnCreditDebits += total;
-        }
-      });
-
-      recDebits = Math.max(0, recDebits - returnCreditDebits);
-
-      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts + otherIncomeTotal;
-      const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments + returnCashRefunds;
+      const cbReceipts = recCredits + cashSalesPaid + vendorReceipts;
+      const cbPayments = payDebits + cashPurchasesPaid + otherCashPayments;
 
       return {
         salesToday: Math.round(salesTotal),
