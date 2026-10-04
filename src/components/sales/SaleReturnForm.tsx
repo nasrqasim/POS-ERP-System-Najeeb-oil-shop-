@@ -1144,6 +1144,7 @@ export default function SaleReturnForm({ onClose, initialData }: SaleReturnFormP
       {printData && (
         <PrintTemplate 
           formatName="Sale Return" 
+          defaultFormat="thermal"
           data={printData}
           items={printData.lines}
           autoPrint={true}

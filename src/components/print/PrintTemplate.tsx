@@ -13,6 +13,7 @@ interface PrintTemplateProps {
   items?: any[];
   autoPrint?: boolean;
   onPrintComplete?: () => void;
+  defaultFormat?: "thermal" | "a5" | "a4";
 }
 
 export default function PrintTemplate({ 
@@ -20,12 +21,14 @@ export default function PrintTemplate({
   data, 
   items = [], 
   autoPrint = false,
-  onPrintComplete
+  onPrintComplete,
+  defaultFormat
 }: PrintTemplateProps) {
   const [config, setConfig] = useState<any>(null);
   const [companyInfo, setCompanyInfo] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
-  const [activeFormat, setActiveFormat] = useState<"thermal" | "a5" | "a4">("a4");
+  const initialFormat = defaultFormat || (formatName.toLowerCase().includes("sale") ? "thermal" : "a4");
+  const [activeFormat, setActiveFormat] = useState<"thermal" | "a5" | "a4">(initialFormat);
   const [formatInitialized, setFormatInitialized] = useState(false);
 
   useEffect(() => {
@@ -34,17 +37,23 @@ export default function PrintTemplate({
       fetch(`/api/settings/print-formats?formatName=${encodeURIComponent(formatName)}`).then(res => res.json()),
       fetch("/api/shop-profile").then(res => res.json())
     ]).then(([formatRes, companyRes]) => {
-      if (formatRes.ok) {
+      if (formatRes.ok && formatRes.data) {
         setConfig(formatRes.data);
-        // Sync activeFormat with saved paperSize from database
+        // Sync activeFormat with saved paperSize from database if explicitly set, else use defaultFormat
         if (!formatInitialized) {
-          const ps = (formatRes.data.paperSize || "A4").toLowerCase();
-          if (ps === "thermal" || ps === "80mm") {
-            setActiveFormat("thermal");
-          } else if (ps === "a5") {
-            setActiveFormat("a5");
+          if (defaultFormat) {
+            setActiveFormat(defaultFormat);
+          } else if (formatRes.data.paperSize) {
+            const ps = formatRes.data.paperSize.toLowerCase();
+            if (ps === "thermal" || ps === "80mm") {
+              setActiveFormat("thermal");
+            } else if (ps === "a5") {
+              setActiveFormat("a5");
+            } else {
+              setActiveFormat("a4");
+            }
           } else {
-            setActiveFormat("a4");
+            setActiveFormat(formatName.toLowerCase().includes("sale") ? "thermal" : "a4");
           }
           setFormatInitialized(true);
         }
@@ -52,7 +61,7 @@ export default function PrintTemplate({
       if (companyRes.ok) setCompanyInfo(companyRes.data);
     });
     return () => setMounted(false);
-  }, [formatName, formatInitialized]);
+  }, [formatName, formatInitialized, defaultFormat]);
 
   // Handle auto-printing only when config and companyInfo are fully fetched and mounted
   useEffect(() => {

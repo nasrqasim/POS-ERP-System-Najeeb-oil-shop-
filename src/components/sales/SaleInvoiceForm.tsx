@@ -1367,6 +1367,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
       {printData && (
         <PrintTemplate 
           formatName="Sale Invoice" 
+          defaultFormat="thermal"
           data={printData}
           items={printData.lines}
           autoPrint={true}
