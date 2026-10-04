@@ -31,17 +31,8 @@ export default function CashFlowManagement() {
     { id: "Forecast", icon: TrendingUp }
   ];
 
-  const payablesData = [
-    { name: "Alpha Supplies Ltd", amount: "Rs. 125,000", due: "Due in 5 days", urgency: "text-rose-500 bg-rose-50" },
-    { name: "Delta Logistics", amount: "Rs. 85,000", due: "Due in 12 days", urgency: "text-amber-500 bg-amber-50" },
-    { name: "Omega Industries", amount: "Rs. 45,000", due: "Due in 20 days", urgency: "text-emerald-500 bg-emerald-50" },
-  ];
-
-  const receivablesData = [
-    { name: "Global Motors", amount: "Rs. 250,000", due: "Overdue 3 days", urgency: "text-rose-500 bg-rose-50" },
-    { name: "Tech Auto Parts", amount: "Rs. 180,000", due: "Due Tomorrow", urgency: "text-amber-500 bg-amber-50" },
-    { name: "City Transport Co.", amount: "Rs. 95,000", due: "Due in 8 days", urgency: "text-emerald-500 bg-emerald-50" },
-  ];
+  const payablesData: any[] = [];
+  const receivablesData: any[] = [];
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-100 dark:border-slate-800 h-full flex flex-col transition-all duration-300">

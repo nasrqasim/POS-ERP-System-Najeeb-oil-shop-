@@ -35,19 +35,14 @@ export default function SalesIntelligence() {
   ];
 
   const funnelData = [
-    { label: "Quotations", count: 12, amount: "Rs.450,000", progress: "100%", color: "border-maroon-800" },
-    { label: "Accepted", count: 8, amount: "Rs.320,000", progress: "66.6%", color: "border-maroon-600" },
-    { label: "Sale Orders", count: 7, amount: "Rs.290,000", progress: "58.3%", color: "border-maroon-500" },
-    { label: "Approved", count: 6, amount: "Rs.250,000", progress: "50.0%", color: "border-maroon-400" },
-    { label: "Invoiced", count: 5, amount: "Rs.210,000", progress: "41.6%", color: "border-maroon-300" },
+    { label: "Quotations", count: 0, amount: "Rs.0", progress: "0%", color: "border-maroon-800" },
+    { label: "Accepted", count: 0, amount: "Rs.0", progress: "0%", color: "border-maroon-600" },
+    { label: "Sale Orders", count: 0, amount: "Rs.0", progress: "0%", color: "border-maroon-500" },
+    { label: "Approved", count: 0, amount: "Rs.0", progress: "0%", color: "border-maroon-400" },
+    { label: "Invoiced", count: 0, amount: "Rs.0", progress: "0%", color: "border-maroon-300" },
   ];
 
-  const regionsData = [
-    { name: "North Region", value: 450000, fill: "#881337" },
-    { name: "South Region", value: 320000, fill: "#be123c" },
-    { name: "East Region", value: 180000, fill: "#e11d48" },
-    { name: "West Region", value: 95000, fill: "#fb7185" },
-  ];
+  const regionsData: any[] = [];
 
   const defaultProductsData: any[] = [];
   const defaultCustomersData: any[] = [];

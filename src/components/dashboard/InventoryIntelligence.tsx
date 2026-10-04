@@ -37,17 +37,8 @@ export default function InventoryIntelligence() {
     { label: "90+ days", progress: 5, color: "bg-rose-600", text: "text-rose-600" },
   ];
 
-  const alertsData = [
-    { item: "Premium Engine Oil 5W-40", type: "Low Stock", qty: "0.94 / 3.75 / 15 L", threshold: "3.13 / 12.5 / 50 L", color: "bg-rose-50 text-rose-600", icon: TrendingDown },
-    { item: "Brake Fluid DOT 4", type: "Reorder Required", qty: "2.81 / 11.25 / 45 L", threshold: "6.25 / 25 / 100 L", color: "bg-amber-50 text-amber-600", icon: RefreshCcw },
-    { item: "Industrial Gear Oil EP", type: "Expiring Soon", qty: "7.5 / 30 / 120 L", threshold: "14 Days", color: "bg-orange-50 text-orange-600", icon: AlertTriangle },
-  ];
-
-  const locationsData = [
-    { name: "Main Warehouse (Karachi)", qty: "281.25 / 1,125 / 4,500 L", value: "Rs. 2,450,000", capacity: 85 },
-    { name: "North Distribution Center", qty: "75 / 300 / 1,200 L", value: "Rs. 850,000", capacity: 45 },
-    { name: "Retail Outlet 1", qty: "21.88 / 87.5 / 350 L", value: "Rs. 185,000", capacity: 90 },
-  ];
+  const alertsData: any[] = [];
+  const locationsData: any[] = [];
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-100 dark:border-slate-800 h-full flex flex-col transition-all duration-300">
