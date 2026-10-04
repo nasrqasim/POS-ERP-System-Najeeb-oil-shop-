@@ -1,20 +1,16 @@
-import mongoose from "mongoose";
-import Party from "@/models/Party";
-import Bank from "@/models/Bank";
-import Account from "@/models/Account";
-import JournalEntry from "@/models/JournalEntry";
-import CashPayment from "@/models/CashPayment";
-import BankPayment from "@/models/BankPayment";
-import CashReceipt from "@/models/CashReceipt";
-import BankReceipt from "@/models/BankReceipt";
+import { 
+  getDocumentById, 
+  createDocument, 
+  updateDocument 
+} from "@/lib/firestore/genericRepository";
 
 type TransactionInput = {
   voucherNo: string;
   date: string;
   partyId?: string;
-  accountId?: string; // For non-party payments/receipts
-  bankId?: string;    // For bank transactions
-  cashAccountId?: string; // For cash transactions
+  accountId?: string;
+  bankId?: string;
+  cashAccountId?: string;
   amount: number;
   wht?: number;
   netAmount: number;
@@ -25,220 +21,198 @@ type TransactionInput = {
 };
 
 export async function postCashPayment(input: TransactionInput) {
-  const session = await mongoose.startSession();
-  try {
-    return await session.withTransaction(async () => {
-      // 1. Update Party Balance (if applicable)
-      if (input.partyId) {
-        await Party.findByIdAndUpdate(input.partyId, { $inc: { balance: -input.amount } }, { session });
-      }
-
-      // 2. Create Payment Record
-      const payment = await CashPayment.create([
-        {
-          voucherNo: input.voucherNo,
-          date: input.date,
-          vendor: input.partyId, // Saving ID in vendor field for consistency if needed, though model says string
-          amount: input.amount,
-          wht: input.wht || 0,
-          netPaid: input.netAmount,
-          status: "Posted"
-        }
-      ], { session, ordered: true });
-
-      // 3. Journal Entries
-      // Debit: Party/Account (reducing liability or increasing expense)
-      // Credit: Cash
-      await JournalEntry.create([
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "2100", // Accounts Payable
-          accountTitle: "Accounts Payable", 
-          debit: input.amount, 
-          credit: 0, 
-          remarks: input.narration || "Cash Payment" 
-        },
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1111", // Cash
-          accountTitle: "Cash", 
-          debit: 0, 
-          credit: input.netAmount, 
-          remarks: input.narration || "Cash Payment" 
-        }
-      ], { session, ordered: true });
-
-      if (input.wht && input.wht > 0) {
-        await JournalEntry.create([{
-          voucherNo: input.voucherNo,
-          accountCode: "2200", // WHT Payable
-          accountTitle: "WHT Payable",
-          debit: 0,
-          credit: input.wht,
-          remarks: "WHT on Payment"
-        }], { session, ordered: true });
-      }
-
-      return payment[0];
-    });
-  } catch (e) {
-    console.error("Error in postCashPayment:", e);
-    throw e;
-  } finally {
-    session.endSession();
+  if (input.partyId) {
+    const party = await getDocumentById("parties", input.partyId);
+    if (party) {
+      const currentBal = Number(party.balance || 0);
+      await updateDocument("parties", input.partyId, { balance: currentBal - input.amount });
+    }
   }
+
+  const payment = await createDocument("cash_payments", {
+    voucherNo: input.voucherNo,
+    date: input.date,
+    partyId: input.partyId,
+    vendor: input.partyId,
+    amount: input.amount,
+    wht: input.wht || 0,
+    netPaid: input.netAmount,
+    status: "Posted",
+    narration: input.narration || "",
+    partyPaymentType: input.partyPaymentType || "",
+    isRefund: input.isRefund || false
+  });
+
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "2100",
+    accountTitle: "Accounts Payable",
+    debit: input.amount,
+    credit: 0,
+    remarks: input.narration || "Cash Payment"
+  });
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1111",
+    accountTitle: "Cash",
+    debit: 0,
+    credit: input.netAmount,
+    remarks: input.narration || "Cash Payment"
+  });
+
+  if (input.wht && input.wht > 0) {
+    await createDocument("journal_entries", {
+      voucherNo: input.voucherNo,
+      accountCode: "2200",
+      accountTitle: "WHT Payable",
+      debit: 0,
+      credit: input.wht,
+      remarks: "WHT on Payment"
+    });
+  }
+
+  return payment;
 }
 
 export async function postCashReceipt(input: TransactionInput) {
-  const session = await mongoose.startSession();
-  try {
-    return await session.withTransaction(async () => {
-      if (input.partyId) {
-        await Party.findByIdAndUpdate(input.partyId, { $inc: { balance: -input.amount } }, { session });
-      }
-
-      const receipt = await CashReceipt.create([
-        {
-          receiptNumber: input.voucherNo,
-          date: input.date,
-          party: input.partyId, // The model says 'party' (string)
-          amount: input.amount,
-          netAmount: input.amount,
-          status: "Posted"
-        }
-      ], { session, ordered: true });
-
-      await JournalEntry.create([
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1111", // Cash
-          accountTitle: "Cash", 
-          debit: input.amount, 
-          credit: 0, 
-          remarks: input.narration || "Cash Receipt" 
-        },
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1100", // Accounts Receivable
-          accountTitle: "Accounts Receivable", 
-          debit: 0, 
-          credit: input.amount, 
-          remarks: input.narration || "Cash Receipt" 
-        }
-      ], { session, ordered: true });
-
-      return receipt[0];
-    });
-  } catch (e) {
-    console.error("Error in postCashReceipt:", e);
-    throw e;
-  } finally {
-    session.endSession();
+  if (input.partyId) {
+    const party = await getDocumentById("parties", input.partyId);
+    if (party) {
+      const currentBal = Number(party.balance || 0);
+      await updateDocument("parties", input.partyId, { balance: currentBal - input.amount });
+    }
   }
+
+  const receipt = await createDocument("cash_receipts", {
+    receiptNumber: input.voucherNo,
+    date: input.date,
+    partyId: input.partyId,
+    party: input.partyId,
+    amount: input.amount,
+    netAmount: input.amount,
+    status: "Posted",
+    narration: input.narration || "",
+    partyReceiptType: input.partyPaymentType || "Regular"
+  });
+
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1111",
+    accountTitle: "Cash",
+    debit: input.amount,
+    credit: 0,
+    remarks: input.narration || "Cash Receipt"
+  });
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1100",
+    accountTitle: "Accounts Receivable",
+    debit: 0,
+    credit: input.amount,
+    remarks: input.narration || "Cash Receipt"
+  });
+
+  return receipt;
 }
 
 export async function postBankPayment(input: TransactionInput) {
-  const session = await mongoose.startSession();
-  try {
-    return await session.withTransaction(async () => {
-      if (input.partyId) {
-        await Party.findByIdAndUpdate(input.partyId, { $inc: { balance: -input.amount } }, { session });
-      }
-
-      if (input.bankId) {
-        await Bank.findByIdAndUpdate(input.bankId, { $inc: { balance: -input.netAmount } }, { session });
-      }
-
-      const payment = await BankPayment.create([
-        {
-          voucherNo: input.voucherNo,
-          date: input.date,
-          vendor: input.partyId,
-          amount: input.amount,
-          wht: input.wht || 0,
-          netPaid: input.netAmount,
-          status: "Posted"
-        }
-      ], { session, ordered: true });
-
-      await JournalEntry.create([
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "2100", 
-          accountTitle: "Accounts Payable", 
-          debit: input.amount, 
-          credit: 0, 
-          remarks: input.narration || "Bank Payment" 
-        },
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1110", // Bank
-          accountTitle: "Bank", 
-          debit: 0, 
-          credit: input.netAmount, 
-          remarks: input.narration || "Bank Payment" 
-        }
-      ], { session, ordered: true });
-
-      return payment[0];
-    });
-  } catch (e) {
-    console.error("Error in postBankPayment:", e);
-    throw e;
-  } finally {
-    session.endSession();
+  if (input.partyId) {
+    const party = await getDocumentById("parties", input.partyId);
+    if (party) {
+      const currentBal = Number(party.balance || 0);
+      await updateDocument("parties", input.partyId, { balance: currentBal - input.amount });
+    }
   }
+
+  if (input.bankId) {
+    const bank = await getDocumentById("banks", input.bankId);
+    if (bank) {
+      const currentBal = Number(bank.balance || 0);
+      await updateDocument("banks", input.bankId, { balance: currentBal - input.netAmount });
+    }
+  }
+
+  const payment = await createDocument("bank_payments", {
+    voucherNo: input.voucherNo,
+    date: input.date,
+    partyId: input.partyId,
+    vendor: input.partyId,
+    bankAccount: input.bankId,
+    bankAccountId: input.bankId,
+    amount: input.amount,
+    wht: input.wht || 0,
+    netPaid: input.netAmount,
+    status: "Posted",
+    narration: input.narration || "",
+    partyPaymentType: input.partyPaymentType || "",
+    isRefund: input.isRefund || false
+  });
+
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "2100",
+    accountTitle: "Accounts Payable",
+    debit: input.amount,
+    credit: 0,
+    remarks: input.narration || "Bank Payment"
+  });
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1110",
+    accountTitle: "Bank",
+    debit: 0,
+    credit: input.netAmount,
+    remarks: input.narration || "Bank Payment"
+  });
+
+  return payment;
 }
 
 export async function postBankReceipt(input: TransactionInput) {
-  const session = await mongoose.startSession();
-  try {
-    return await session.withTransaction(async () => {
-      if (input.partyId) {
-        await Party.findByIdAndUpdate(input.partyId, { $inc: { balance: -input.amount } }, { session });
-      }
-
-      if (input.bankId) {
-        await Bank.findByIdAndUpdate(input.bankId, { $inc: { balance: input.amount } }, { session });
-      }
-
-      const receipt = await BankReceipt.create([
-        {
-          receiptNumber: input.voucherNo,
-          date: input.date,
-          party: input.partyId, // The model says 'party' (string)
-          bankAccount: input.bankId,
-          amount: input.amount,
-          netAmount: input.amount,
-          status: "Posted"
-        }
-      ], { session, ordered: true });
-
-      await JournalEntry.create([
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1110", 
-          accountTitle: "Bank", 
-          debit: input.amount, 
-          credit: 0, 
-          remarks: input.narration || "Bank Receipt" 
-        },
-        { 
-          voucherNo: input.voucherNo, 
-          accountCode: "1100", 
-          accountTitle: "Accounts Receivable", 
-          debit: 0, 
-          credit: input.amount, 
-          remarks: input.narration || "Bank Receipt" 
-        }
-      ], { session, ordered: true });
-
-      return receipt[0];
-    });
-  } catch (e) {
-    console.error("Error in postBankReceipt:", e);
-    throw e;
-  } finally {
-    session.endSession();
+  if (input.partyId) {
+    const party = await getDocumentById("parties", input.partyId);
+    if (party) {
+      const currentBal = Number(party.balance || 0);
+      await updateDocument("parties", input.partyId, { balance: currentBal - input.amount });
+    }
   }
+
+  if (input.bankId) {
+    const bank = await getDocumentById("banks", input.bankId);
+    if (bank) {
+      const currentBal = Number(bank.balance || 0);
+      await updateDocument("banks", input.bankId, { balance: currentBal + input.amount });
+    }
+  }
+
+  const receipt = await createDocument("bank_receipts", {
+    receiptNumber: input.voucherNo,
+    date: input.date,
+    partyId: input.partyId,
+    party: input.partyId,
+    bankAccount: input.bankId,
+    amount: input.amount,
+    netAmount: input.amount,
+    status: "Posted",
+    narration: input.narration || ""
+  });
+
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1110",
+    accountTitle: "Bank",
+    debit: input.amount,
+    credit: 0,
+    remarks: input.narration || "Bank Receipt"
+  });
+  await createDocument("journal_entries", {
+    voucherNo: input.voucherNo,
+    accountCode: "1100",
+    accountTitle: "Accounts Receivable",
+    debit: 0,
+    credit: input.amount,
+    remarks: input.narration || "Bank Receipt"
+  });
+
+  return receipt;
 }

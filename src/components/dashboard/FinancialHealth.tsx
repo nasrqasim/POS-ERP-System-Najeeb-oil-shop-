@@ -9,9 +9,9 @@ export default function FinancialHealth() {
     workingCapital: 0,
     grossMarginPercent: 0,
     netMarginPercent: 0,
-    currentRatio: "1.85",
-    quickRatio: "1.20",
-    debtToEquity: "0.45"
+    currentRatio: "0.00",
+    quickRatio: "0.00",
+    debtToEquity: "0.00"
   });
 
   useEffect(() => {
@@ -23,15 +23,15 @@ export default function FinancialHealth() {
           const d = json.data;
           const cash = d.cashBank?.current || 0;
           const ar = d.receivables?.current || 0;
-          const ap = d.payables?.current || 1;
+          const ap = d.payables?.current || 0;
           const stock = d.totalStockValue || 0;
 
-          const cRatio = (ap > 0 ? (cash + ar + stock) / ap : 1.5).toFixed(2);
-          const qRatio = (ap > 0 ? (cash + ar) / ap : 1.0).toFixed(2);
-          const deRatio = (cash + ar > 0 ? ap / (cash + ar) : 0.45).toFixed(2);
+          const cRatio = ap > 0 ? ((cash + ar + stock) / ap).toFixed(2) : (cash + ar + stock > 0 ? "1.00" : "0.00");
+          const qRatio = ap > 0 ? ((cash + ar) / ap).toFixed(2) : (cash + ar > 0 ? "1.00" : "0.00");
+          const deRatio = (cash + ar > 0 && ap > 0) ? (ap / (cash + ar)).toFixed(2) : "0.00";
 
           setData({
-            workingCapital: d.workingCapital || (cash + ar - ap),
+            workingCapital: d.workingCapital ?? (cash + ar - ap),
             grossMarginPercent: d.grossMarginPercent || 0,
             netMarginPercent: d.netMarginPercent || 0,
             currentRatio: cRatio,

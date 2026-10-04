@@ -1,47 +1,44 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import OtherIncome from "@/models/OtherIncome";
-import JournalEntry from "@/models/JournalEntry";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const search = searchParams.get("search");
+    const search = (searchParams.get("search") || "").toLowerCase().trim();
     const incomeType = searchParams.get("incomeType");
     const paymentMethod = searchParams.get("paymentMethod");
     const fromDate = searchParams.get("fromDate");
     const toDate = searchParams.get("toDate");
 
-    await dbConnect();
-
-    const query: any = {};
+    let rows = await getDocuments("other_incomes");
 
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
-      ];
+      rows = rows.filter((r: any) =>
+        String(r.title || "").toLowerCase().includes(search) ||
+        String(r.description || "").toLowerCase().includes(search)
+      );
     }
 
     if (incomeType) {
-      query.incomeType = incomeType;
+      rows = rows.filter((r: any) => r.incomeType === incomeType);
     }
 
     if (paymentMethod) {
-      query.paymentMethod = paymentMethod;
+      rows = rows.filter((r: any) => r.paymentMethod === paymentMethod);
     }
 
     if (fromDate || toDate) {
-      query.date = {};
-      if (fromDate) query.date.$gte = new Date(fromDate);
-      if (toDate) query.date.$lte = new Date(toDate);
+      const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
+      const toTime = toDate ? new Date(toDate).getTime() : Infinity;
+      rows = rows.filter((r: any) => {
+        const t = new Date(r.date || 0).getTime();
+        return t >= fromTime && t <= toTime;
+      });
     }
 
-    const rows = await OtherIncome.find(query)
-      .sort({ date: -1, createdAt: -1 })
-      .lean();
+    rows.sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
     return ok(rows);
   } catch (e) {
@@ -52,38 +49,32 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-
-    // 1. Create OtherIncome record
-    const row = await OtherIncome.create(body);
+    const row = await createDocument("other_incomes", body);
 
     const voucherNo = `INC-${row._id}`;
-
-    // 2. Create corresponding Journal Entries to feed reports & dashboard automatically
     const isCash = row.paymentMethod === "Cash";
     const assetCode = isCash ? "1111" : "1110";
     const assetTitle = isCash ? "Cash" : "Bank";
 
-    await JournalEntry.create([
-      {
-        date: row.date,
-        voucherNo,
-        accountCode: assetCode,
-        accountTitle: assetTitle,
-        debit: row.amount,
-        credit: 0,
-        remarks: row.description || row.title
-      },
-      {
-        date: row.date,
-        voucherNo,
-        accountCode: "40002001",
-        accountTitle: "Other Income",
-        debit: 0,
-        credit: row.amount,
-        remarks: row.description || row.title
-      }
-    ]);
+    await createDocument("journal_entries", {
+      date: row.date,
+      voucherNo,
+      accountCode: assetCode,
+      accountTitle: assetTitle,
+      debit: Number(row.amount) || 0,
+      credit: 0,
+      remarks: row.description || row.title
+    });
+
+    await createDocument("journal_entries", {
+      date: row.date,
+      voucherNo,
+      accountCode: "40002001",
+      accountTitle: "Other Income",
+      debit: 0,
+      credit: Number(row.amount) || 0,
+      remarks: row.description || row.title
+    });
 
     return ok(row, 201);
   } catch (e) {

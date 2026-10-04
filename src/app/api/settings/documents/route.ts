@@ -1,13 +1,10 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { DocumentSetting } from "@/models/DocumentSetting";
+import { getDocuments, createDocument, updateDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
   try {
-    await dbConnect();
-    const settings = await DocumentSetting.find({});
+    const settings = await getDocuments("document_settings");
     
-    // Default settings if none exist
     if (settings.length === 0) {
       const defaults = [
         { type: "Sale Invoice", prefix: "INV-", nextNo: 1, padding: 3 },
@@ -16,8 +13,12 @@ export async function GET() {
         { type: "Cash Receipt", prefix: "CR-", nextNo: 1, padding: 5 },
         { type: "GRN", prefix: "GRN-", nextNo: 1, padding: 4 },
       ];
-      await DocumentSetting.insertMany(defaults);
-      return ok(defaults);
+      const created = [];
+      for (const d of defaults) {
+        const row = await createDocument("document_settings", d);
+        created.push(row);
+      }
+      return ok(created);
     }
     
     return ok(settings);
@@ -33,14 +34,15 @@ export async function POST(req: Request) {
 
     if (!Array.isArray(settings)) return fail("Invalid data format");
 
-    await dbConnect();
+    const existing = await getDocuments("document_settings");
 
     for (const s of settings) {
-      await DocumentSetting.findOneAndUpdate(
-        { type: s.type },
-        { prefix: s.prefix, nextNo: s.nextNo, padding: s.padding },
-        { upsert: true }
-      );
+      const match = existing.find((e: any) => e.type === s.type);
+      if (match) {
+        await updateDocument("document_settings", match._id, { prefix: s.prefix, nextNo: s.nextNo, padding: s.padding });
+      } else {
+        await createDocument("document_settings", { type: s.type, prefix: s.prefix, nextNo: s.nextNo, padding: s.padding });
+      }
     }
 
     return ok({ message: "Settings saved successfully" });

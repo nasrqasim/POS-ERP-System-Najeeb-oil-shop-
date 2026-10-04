@@ -1,9 +1,6 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Invoice from "@/models/Invoice";
-import Item from "@/models/Item";
+import { getDocuments, getDocumentById } from "@/lib/firestore/genericRepository";
 import { lineStockQty } from "@/lib/itemUnits";
-import mongoose from "mongoose";
 
 const IN_TYPES = new Set([
   "purchase",
@@ -49,26 +46,27 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const itemId = searchParams.get("itemId");
     if (!itemId) return fail("itemId is required");
-    if (!mongoose.Types.ObjectId.isValid(itemId)) return fail("Invalid itemId");
 
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const itemOid = new mongoose.Types.ObjectId(itemId);
-
-    await dbConnect();
 
     const fromDate = from ? parseLocalDate(from) : null;
     const toDate = to ? parseLocalDate(to, true) : null;
 
-    const invoices = await Invoice.find({
-      status: { $nin: ["cancelled", "Cancelled"] },
-      "lines.itemId": { $in: [itemOid, itemId] },
-    })
-      .select("invoiceNo type date lines locationId reference partyId createdAt")
-      .populate("locationId", "name")
-      .populate("partyId", "name companyName type")
-      .sort({ date: 1, createdAt: 1 })
-      .lean();
+    const allInvoices = await getDocuments("invoices");
+    const parties = await getDocuments("parties");
+    const locations = await getDocuments("locations");
+
+    const partyMap = new Map(parties.map((p: any) => [String(p._id), p]));
+    const locMap = new Map(locations.map((l: any) => [String(l._id), l.name]));
+
+    const matchingInvoices = allInvoices.filter((inv: any) => {
+      if (inv.status === "cancelled" || inv.status === "Cancelled") return false;
+      if (!Array.isArray(inv.lines)) return false;
+      return inv.lines.some((l: any) => resolveLineItemId(l) === itemId);
+    });
+
+    matchingInvoices.sort((a: any, b: any) => new Date(a.date || a.createdAt || 0).getTime() - new Date(b.date || b.createdAt || 0).getTime());
 
     const rows: Array<{
       date: Date;
@@ -82,13 +80,13 @@ export async function GET(req: Request) {
       total: number;
     }> = [];
 
-    for (const inv of invoices) {
+    for (const inv of matchingInvoices) {
       const invType = String(inv.type || "");
       const isIn = IN_TYPES.has(invType);
       const isOut = OUT_TYPES.has(invType);
       if (!isIn && !isOut) continue;
 
-      const partyObj = inv.partyId as any;
+      const partyObj = inv.partyId ? partyMap.get(String(inv.partyId)) : null;
       let partyName = invType.toLowerCase().includes("sale") ? "Walk-in (Cash) Customer" : "Cash Vendor";
       if (partyObj) {
         partyName = partyObj.name || partyObj.companyName || partyName;
@@ -107,10 +105,10 @@ export async function GET(req: Request) {
         }
 
         rows.push({
-          date: inv.date as Date,
+          date: new Date(inv.date || inv.createdAt || Date.now()),
           refNo: inv.invoiceNo || "",
           type: invType.replace(/_/g, " ").toUpperCase(),
-          location: (inv.locationId as { name?: string })?.name || "Main Warehouse",
+          location: (inv.locationId ? locMap.get(String(inv.locationId)) : null) || "Main Warehouse",
           partyName,
           in: isIn ? qty : 0,
           out: isOut ? qty : 0,
@@ -120,24 +118,23 @@ export async function GET(req: Request) {
       }
     }
 
-    const itemObj = await Item.findById(itemOid).select("stockQtyCartons createdAt purchaseRate gallonsInCtn litersInCtn").lean();
-    const currentStock = itemObj ? ((itemObj as any).stockQtyCartons || 0) : 0;
-    const gallonsInCtn = itemObj ? ((itemObj as any).gallonsInCtn || 0) : 0;
-    const litersInCtn = itemObj ? ((itemObj as any).litersInCtn || 0) : 0;
+    const itemObj = await getDocumentById("items", itemId);
+    const currentStock = itemObj ? Number(itemObj.stockQtyCartons || 0) : 0;
+    const gallonsInCtn = itemObj ? Number(itemObj.gallonsInCtn || 0) : 0;
+    const litersInCtn = itemObj ? Number(itemObj.litersInCtn || 0) : 0;
 
     const totalInAllTime = rows.reduce((sum, r) => sum + r.in, 0);
     const totalOutAllTime = rows.reduce((sum, r) => sum + r.out, 0);
     const initialStock = Math.max(0, currentStock - totalInAllTime + totalOutAllTime);
 
-    // Insert opening balance as the first row (like PV 215 in Excel)
     if (initialStock > 0) {
-      const itemCreatedAt = (itemObj as any)?.createdAt;
+      const itemCreatedAt = itemObj?.createdAt;
       const openingDate = itemCreatedAt
         ? new Date(itemCreatedAt)
         : rows.length > 0
           ? new Date(rows[0].date)
           : new Date();
-      const pRate = (itemObj as any)?.purchaseRate || 0;
+      const pRate = Number(itemObj?.purchaseRate || 0);
 
       rows.unshift({
         date: openingDate,
@@ -152,7 +149,6 @@ export async function GET(req: Request) {
       });
     }
 
-    // Start running balance from 0 (opening stock is now included as a row)
     let runningBalance = 0;
     const rowsWithBalance = rows.map((row) => {
       runningBalance += row.in - row.out;
@@ -160,7 +156,6 @@ export async function GET(req: Request) {
       return { ...row, balance: runningBalance };
     });
 
-    // Date range filtering
     let openingBalance = 0;
     const beforeRows = rowsWithBalance.filter(row => fromDate && new Date(row.date) < fromDate);
     if (beforeRows.length > 0) {

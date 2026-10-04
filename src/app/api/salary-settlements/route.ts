@@ -1,18 +1,20 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import SalarySettlement from "@/models/SalarySettlement";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
-  await dbConnect();
-  const rows = await SalarySettlement.find().sort({ createdAt: -1 }).lean();
-  return ok(rows);
+  try {
+    const rows = await getDocuments("salary_settlements");
+    rows.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-    const row = await SalarySettlement.create(body);
+    const row = await createDocument("salary_settlements", body);
     return ok(row, 201);
   } catch (e) {
     return fail((e as Error).message);

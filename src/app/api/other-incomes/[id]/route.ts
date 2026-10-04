@@ -1,12 +1,10 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import OtherIncome from "@/models/OtherIncome";
-import JournalEntry from "@/models/JournalEntry";
+import { getDocumentById, updateDocument, deleteDocument, createDocument } from "@/lib/firestore/genericRepository";
+import { deleteJournalEntriesByVoucherNo } from "@/services/posting/invoicePostingHelper";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    const row = await OtherIncome.findById(params.id).lean();
+    const row = await getDocumentById("other_incomes", params.id);
     if (!row) {
       return fail("Record not found", 404);
     }
@@ -19,43 +17,37 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    await dbConnect();
-
-    // 1. Update OtherIncome record
-    const row = await OtherIncome.findByIdAndUpdate(params.id, body, { new: true });
+    const row = await updateDocument("other_incomes", params.id, body);
     if (!row) {
       return fail("Record not found", 404);
     }
 
     const voucherNo = `INC-${row._id}`;
-
-    // 2. Refresh/update corresponding Journal Entries
-    await JournalEntry.deleteMany({ voucherNo });
+    await deleteJournalEntriesByVoucherNo(voucherNo);
 
     const isCash = row.paymentMethod === "Cash";
     const assetCode = isCash ? "1111" : "1110";
     const assetTitle = isCash ? "Cash" : "Bank";
 
-    await JournalEntry.create([
-      {
-        date: row.date,
-        voucherNo,
-        accountCode: assetCode,
-        accountTitle: assetTitle,
-        debit: row.amount,
-        credit: 0,
-        remarks: row.description || row.title
-      },
-      {
-        date: row.date,
-        voucherNo,
-        accountCode: "40002001",
-        accountTitle: "Other Income",
-        debit: 0,
-        credit: row.amount,
-        remarks: row.description || row.title
-      }
-    ]);
+    await createDocument("journal_entries", {
+      date: row.date,
+      voucherNo,
+      accountCode: assetCode,
+      accountTitle: assetTitle,
+      debit: Number(row.amount) || 0,
+      credit: 0,
+      remarks: row.description || row.title
+    });
+
+    await createDocument("journal_entries", {
+      date: row.date,
+      voucherNo,
+      accountCode: "40002001",
+      accountTitle: "Other Income",
+      debit: 0,
+      credit: Number(row.amount) || 0,
+      remarks: row.description || row.title
+    });
 
     return ok(row);
   } catch (e) {
@@ -65,18 +57,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-
-    // 1. Delete OtherIncome record
-    const row = await OtherIncome.findByIdAndDelete(params.id);
+    const row = await getDocumentById("other_incomes", params.id);
     if (!row) {
       return fail("Record not found", 404);
     }
 
+    await deleteDocument("other_incomes", params.id);
     const voucherNo = `INC-${row._id}`;
-
-    // 2. Delete corresponding Journal Entries
-    await JournalEntry.deleteMany({ voucherNo });
+    await deleteJournalEntriesByVoucherNo(voucherNo);
 
     return ok({ message: "Record deleted successfully" });
   } catch (e) {

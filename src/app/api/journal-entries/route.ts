@@ -1,32 +1,13 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import JournalEntry from "@/models/JournalEntry";
-import CashPayment from "@/models/CashPayment";
-import CashReceipt from "@/models/CashReceipt";
-import { recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
+import { getAllJournalEntries, createJournalEntry } from "@/lib/firestore/journalRepository";
+import { createCashPayment, createCashReceipt } from "@/lib/firestore/paymentsRepository";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const accountCode = searchParams.get("accountCode");
-  const voucherNo = searchParams.get("voucherNo");
-  const fromDate = searchParams.get("fromDate");
-  const toDate = searchParams.get("toDate");
+  const partyId = searchParams.get("partyId");
 
-  await dbConnect();
   try {
-    const query: any = {};
-    if (accountCode) query.accountCode = accountCode;
-    if (voucherNo) query.voucherNo = voucherNo;
-    if (fromDate || toDate) {
-      query.date = {};
-      if (fromDate) query.date.$gte = new Date(fromDate);
-      if (toDate) query.date.$lte = new Date(toDate);
-    }
-
-    const rows = await JournalEntry.find(query)
-      .populate("partyId", "name companyName type code")
-      .sort({ date: 1, createdAt: 1 })
-      .lean();
+    const rows = await getAllJournalEntries(partyId || undefined);
     return ok(rows);
   } catch (e) {
     return fail((e as Error).message);
@@ -36,18 +17,16 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-    
+
     let created;
     if (body.entries && Array.isArray(body.entries)) {
-      created = await JournalEntry.create(body.entries);
+      created = await Promise.all(body.entries.map((entry: any) => createJournalEntry(entry)));
     } else {
-      created = await JournalEntry.create(body);
+      created = await createJournalEntry(body);
     }
 
-    // Create CashPayment or CashReceipt if party is selected
     const partyId = body.partyId;
-    const partyType = body.partyType; // "customer" or "vendor"
+    const partyType = body.partyType;
 
     if (partyId && partyType) {
       const amount = Number(body.amount) || 0;
@@ -56,7 +35,7 @@ export async function POST(req: Request) {
       const voucherNo = body.voucherNo || `JV-${Date.now()}`;
 
       if (partyType === "vendor") {
-        await CashPayment.create({
+        await createCashPayment({
           voucherNo,
           paymentType: "party",
           date,
@@ -66,9 +45,8 @@ export async function POST(req: Request) {
           narration: remarks,
           status: "Posted",
         });
-        await recalculatePartyBalance(String(partyId));
       } else if (partyType === "customer") {
-        await CashReceipt.create({
+        await createCashReceipt({
           receiptNumber: voucherNo,
           receiptType: "party",
           date,
@@ -77,7 +55,6 @@ export async function POST(req: Request) {
           narration: remarks,
           status: "Posted",
         });
-        await recalculatePartyBalance(String(partyId));
       }
     }
 

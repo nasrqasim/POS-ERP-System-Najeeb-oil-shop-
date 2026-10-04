@@ -7,21 +7,14 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 
 export default function CashFlowManagement() {
   const [activeTab, setActiveTab] = useState("Flow");
-  const [flowData, setFlowData] = useState<any[]>([
-    { month: 'Jan', inflow: 450000, outflow: 380000 },
-    { month: 'Feb', inflow: 520000, outflow: 410000 },
-    { month: 'Mar', inflow: 480000, outflow: 450000 },
-    { month: 'Apr', inflow: 610000, outflow: 390000 },
-    { month: 'May', inflow: 590000, outflow: 420000 },
-    { month: 'Jun', inflow: 650000, outflow: 480000 },
-  ]);
+  const [flowData, setFlowData] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchFlow = async () => {
       try {
         const res = await fetch("/api/dashboard");
         const json = await res.json();
-        if (json.ok && json.data.flowData?.length) {
+        if (json.ok && Array.isArray(json.data.flowData)) {
           setFlowData(json.data.flowData);
         }
       } catch (e) {
@@ -124,7 +117,9 @@ export default function CashFlowManagement() {
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Inflow</p>
                 </div>
-                <h4 className="text-lg font-black text-slate-800 dark:text-slate-100 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">Rs. 3,300,000</h4>
+                <h4 className="text-lg font-black text-slate-800 dark:text-slate-100 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                  Rs. {flowData.reduce((sum, d) => sum + (Number(d.inflow) || 0), 0).toLocaleString()}
+                </h4>
               </div>
               <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/30 group hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
@@ -133,7 +128,9 @@ export default function CashFlowManagement() {
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Outflow</p>
                 </div>
-                <h4 className="text-lg font-black text-slate-800 dark:text-slate-100 dark:text-white group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">Rs. 2,530,000</h4>
+                <h4 className="text-lg font-black text-slate-800 dark:text-slate-100 dark:text-white group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">
+                  Rs. {flowData.reduce((sum, d) => sum + (Number(d.outflow) || 0), 0).toLocaleString()}
+                </h4>
               </div>
             </div>
           </div>

@@ -1,11 +1,10 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { FinancialYear } from "@/models/FinancialYear";
+import { getDocuments, createDocument, updateDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
   try {
-    await dbConnect();
-    const years = await FinancialYear.find({}).sort({ startDate: -1 });
+    const years = await getDocuments("financial_years");
+    years.sort((a: any, b: any) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime());
     return ok(years);
   } catch (e) {
     return fail((e as Error).message);
@@ -21,14 +20,16 @@ export async function POST(req: Request) {
       return fail("Missing required fields");
     }
 
-    await dbConnect();
-
-    // If new year is "Current", set others to "Closed" or "Upcoming"
     if (status === "Current") {
-      await FinancialYear.updateMany({ status: "Current" }, { status: "Closed", isClosed: true });
+      const existingYears = await getDocuments("financial_years");
+      for (const y of existingYears) {
+        if (y.status === "Current") {
+          await updateDocument("financial_years", y._id, { status: "Closed", isClosed: true });
+        }
+      }
     }
 
-    const newYear = await FinancialYear.create({
+    const newYear = await createDocument("financial_years", {
       name,
       startDate,
       endDate,

@@ -1,22 +1,28 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Bank from "@/models/Bank";
+import { getDocuments, createDocument, updateDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
-  await dbConnect();
-  const rows = await Bank.find().sort({ createdAt: -1 }).lean();
-  return ok(rows);
+  try {
+    const rows = await getDocuments("banks");
+    rows.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-    // If setting as default, unset all others first
     if (body.isDefault) {
-      await Bank.updateMany({}, { isDefault: false });
+      const existing = await getDocuments("banks");
+      for (const b of existing) {
+        if (b.isDefault) {
+          await updateDocument("banks", b._id, { isDefault: false });
+        }
+      }
     }
-    const row = await Bank.create(body);
+    const row = await createDocument("banks", body);
     return ok(row, 201);
   } catch (e) {
     return fail((e as Error).message);

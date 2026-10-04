@@ -9,7 +9,8 @@ import { exportToExcel, printListDocument } from "@/lib/excel";
 export default function CashBanksPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+  const [ledgerTxs, setLedgerTxs] = useState<any[]>([]);
+  const [ledgerOpening, setLedgerOpening] = useState(0);
   const [loading, setLoading] = useState(true);
   
   const [selectedPeriod, setSelectedPeriod] = useState<"today" | "yesterday" | "thisWeek" | "thisMonth" | "thisYear" | "custom">("thisMonth");
@@ -34,14 +35,13 @@ export default function CashBanksPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [accRes, jvRes] = await Promise.all([
-        fetch("/api/accounts"),
-        fetch("/api/journal-entries")
-      ]);
-      const accJson = await accRes.json();
-      const jvJson = await jvRes.json();
-      if (accJson.ok) setAccounts(accJson.data);
-      if (jvJson.ok) setJournalEntries(jvJson.data);
+      const res = await fetch("/api/cash-bank-ledger");
+      const json = await res.json();
+      if (json.ok) {
+        setAccounts(json.data.cashBankAccounts || []);
+        setLedgerTxs(json.data.transactions || []);
+        setLedgerOpening(json.data.opening || 0);
+      }
     } catch (e) {
       console.error("Error fetching cash banks data:", e);
     } finally {
@@ -90,21 +90,9 @@ export default function CashBanksPage() {
     return { start, end };
   }, [selectedPeriod, customFromDate, customToDate]);
 
-  // Filter Cash and Bank accounts & codes
-  const { cashBankAccounts, cashBankCodes, initialOpening } = useMemo(() => {
-    const filtered = accounts.filter((a: any) => 
-      ["cash", "bank"].includes(String(a.type || "").toLowerCase()) ||
-      ["1111", "1110"].includes(a.code)
-    );
-    const codes = filtered.map(a => a.code);
-    const opBalance = filtered.reduce((sum, a) => sum + (a.openingBalance ?? 0), 0);
-    return { cashBankAccounts: filtered, cashBankCodes: codes, initialOpening: opBalance };
-  }, [accounts]);
-
-  // Filter journal entries for Cash & Bank accounts
-  const cashBankEntries = useMemo(() => {
-    return journalEntries.filter(e => cashBankCodes.includes(e.accountCode));
-  }, [journalEntries, cashBankCodes]);
+  const cashBankAccounts = accounts;
+  const initialOpening = ledgerOpening;
+  const cashBankEntries = ledgerTxs;
 
   // Classify transactions in a given range into the required categories
   const classifyRange = (entries: any[], start: Date, end: Date) => {
@@ -122,54 +110,16 @@ export default function CashBanksPage() {
       if (entryDate.getTime() >= start.getTime() && entryDate.getTime() <= end.getTime()) {
         const debit = Number(entry.debit) || 0;
         const credit = Number(entry.credit) || 0;
-        const vNo = (entry.voucherNo || "").toUpperCase();
-        const remarks = (entry.remarks || "").toLowerCase();
-        const accTitle = (entry.accountTitle || "").toLowerCase();
-        
-        const isCashAcc = entry.accountCode === "1111" || accTitle.includes("cash");
-        const isBankAcc = entry.accountCode === "1110" || accTitle.includes("bank");
+        const itemModule = entry.module || "";
 
-        if (debit > 0) {
-          // Check if transfer (withdraw/deposit)
-          const isWithdraw = remarks.includes("withdraw");
-          const isDeposit = remarks.includes("deposit");
-
-          // Check if sales collection
-          const isSales = vNo.startsWith("SI") || vNo.startsWith("POS") || vNo.startsWith("CRV") || vNo.startsWith("BRV") || remarks.includes("sale") || remarks.includes("customer") || remarks.includes("recovery") || remarks.includes("down payment") || remarks.includes("collection");
-          
-          // Check if other income
-          const isOtherIncome = vNo.startsWith("INC") || remarks.includes("other income") || remarks.includes("commission") || remarks.includes("interest") || remarks.includes("rent") || remarks.includes("income") || vNo.startsWith("OIV");
-
-          if (isSales) {
-            salesReceipts += debit;
-          } else if (isOtherIncome) {
-            otherIncome += debit;
-          } else if (isCashAcc && isWithdraw) {
-            withdrawals += debit; // Cash debited from bank withdrawal
-          } else if (isBankAcc && isDeposit) {
-            deposits += debit; // Bank debited from cash deposit
-          } else {
-            if (isCashAcc) cashReceipts += debit;
-            else if (isBankAcc) bankReceipts += debit;
-          }
-        } else if (credit > 0) {
-          const isWithdraw = remarks.includes("withdraw");
-          const isDeposit = remarks.includes("deposit");
-
-          // Credit: Cash/Bank is reduced
-          // Check if it is an expense
-          const isExpense = entry.accountCode?.startsWith("5") || entry.accountCode?.startsWith("6") || remarks.includes("expense") || remarks.includes("salary") || remarks.includes("bill") || remarks.includes("repairs") || remarks.includes("rent");
-          
-          if (isCashAcc && isDeposit) {
-            deposits += credit; // Cash credited for bank deposit
-          } else if (isBankAcc && isWithdraw) {
-            withdrawals += credit; // Bank credited for cash withdrawal
-          } else if (isExpense) {
-            expenses += credit;
-          } else {
-            payments += credit;
-          }
-        }
+        if (itemModule === "Sales") salesReceipts += debit;
+        else if (itemModule === "Cash Receipts") cashReceipts += debit;
+        else if (itemModule === "Bank Receipts") bankReceipts += debit;
+        else if (itemModule === "Other Income") otherIncome += debit;
+        else if (itemModule === "Purchases" || itemModule === "Cash Payments" || itemModule === "Bank Payments") payments += credit;
+        else if (itemModule === "Expenses") expenses += credit;
+        else if (itemModule === "Sales Return") payments += credit; // Refund
+        else if (itemModule === "Purchase Return") cashReceipts += debit; // Refund recv
       }
     });
 
@@ -327,7 +277,7 @@ export default function CashBanksPage() {
     return cashBankAccounts.map(acc => {
       let debit = 0;
       let credit = 0;
-      journalEntries.forEach(e => {
+      ledgerTxs.forEach(e => {
         const entryDate = new Date(e.date);
         if (e.accountCode === acc.code && entryDate.getTime() >= dateRange.start.getTime() && entryDate.getTime() <= dateRange.end.getTime()) {
           debit += e.debit || 0;
@@ -338,7 +288,7 @@ export default function CashBanksPage() {
       // Calculate account opening before dateRange.start
       let beforeD = 0;
       let beforeC = 0;
-      journalEntries.forEach(e => {
+      ledgerTxs.forEach(e => {
         const entryDate = new Date(e.date);
         if (e.accountCode === acc.code && entryDate.getTime() < dateRange.start.getTime()) {
           beforeD += e.debit || 0;
@@ -355,7 +305,7 @@ export default function CashBanksPage() {
         balance
       };
     });
-  }, [cashBankAccounts, journalEntries, dateRange]);
+  }, [cashBankAccounts, ledgerTxs, dateRange]);
 
   // Individual Journal Transactions inside dateRange
   const periodTransactions = useMemo(() => {

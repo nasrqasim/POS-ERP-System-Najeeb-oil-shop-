@@ -1,12 +1,10 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import SalaryAdvance from "@/models/SalaryAdvance";
+import { updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    await dbConnect();
-    const row = await SalaryAdvance.findByIdAndUpdate(params.id, body, { new: true });
+    const row = await updateDocument("salary_advances", params.id, body);
     if (!row) return fail("Not found", 404);
     return ok(row);
   } catch (e) {
@@ -16,8 +14,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    await SalaryAdvance.findByIdAndDelete(params.id);
+    await deleteDocument("salary_advances", params.id);
     return ok({ deleted: true });
   } catch (e) {
     return fail((e as Error).message);

@@ -13,7 +13,27 @@ import {
   BadgeCent
 } from "lucide-react";
 
+import { useState, useEffect } from "react";
+
 export default function WebsiteSnapshot() {
+  const [data, setData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then((res) => res.json())
+      .then((res) => {
+        const d = res?.data || res;
+        if (d) {
+          setData(d);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const totalSales = data?.totalSales ?? 0;
+  const stockValue = data?.totalStockValue ?? 0;
+  const cashInHand = data?.cashBank?.current ?? 0;
+  const totalPayables = data?.totalVendorPayables ?? 0;
   const modules = [
     { name: "Dashboard Overview", icon: LayoutDashboard, color: "text-maroon-800", bg: "bg-maroon-50", desc: "Real-time KPIs, Financial Health, and Operational Metrics." },
     { name: "Sales & Invoicing", icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-50", desc: "Quotations, Sale Orders, Tax Invoices, and POS Counter Sales." },
@@ -49,19 +69,19 @@ export default function WebsiteSnapshot() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white p-4 rounded-2xl shadow-sm">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Sales</p>
-              <p className="text-xl font-black text-slate-900">Rs. 1,250,450</p>
+              <p className="text-xl font-black text-slate-900">Rs. {Number(totalSales).toLocaleString()}</p>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stock Value</p>
-              <p className="text-xl font-black text-slate-900">Rs. 8,450,000</p>
+              <p className="text-xl font-black text-slate-900">Rs. {Number(stockValue).toLocaleString()}</p>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cash in Hand</p>
-              <p className="text-xl font-black text-emerald-600">Rs. 450,200</p>
+              <p className="text-xl font-black text-emerald-600">Rs. {Number(cashInHand).toLocaleString()}</p>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Payable</p>
-              <p className="text-xl font-black text-rose-600">Rs. 950,000</p>
+              <p className="text-xl font-black text-rose-600">Rs. {Number(totalPayables).toLocaleString()}</p>
             </div>
           </div>
         </div>

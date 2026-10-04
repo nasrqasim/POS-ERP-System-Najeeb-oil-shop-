@@ -1,9 +1,6 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Invoice from "@/models/Invoice";
-import Party from "@/models/Party";
-import JournalEntry from "@/models/JournalEntry";
-import { generateInvoiceJournalEntries, recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
+import { getDocumentById, updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
+import { generateInvoiceJournalEntries, recalculatePartyBalance, deleteJournalEntriesByInvoiceId } from "@/services/posting/invoicePostingHelper";
 import { normalizeInvoicePayload } from "@/lib/invoicePayload";
 import { getPopulatedInvoice } from "@/lib/invoiceQueries";
 
@@ -12,7 +9,6 @@ import { authOptions } from "@/lib/auth";
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
     const session = await getServerSession(authOptions);
     const role = session?.user?.role;
     const normalizedRole = (role || "").toLowerCase().replace(/\s+/g, "");
@@ -38,10 +34,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const role = session?.user?.role;
     const normalizedRole = (role || "").toLowerCase().replace(/\s+/g, "");
 
-    await dbConnect();
-
     if (normalizedRole === "sales_user" || normalizedRole === "salesuser") {
-      const existing = await Invoice.findById(params.id).lean();
+      const existing = await getDocumentById("invoices", params.id);
       if (!existing || ((existing as any).type !== "sale" && (existing as any).type !== "sale_return" && (existing as any).type !== "pos")) {
         return fail("Permission denied", 403);
       }
@@ -57,21 +51,21 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     if (payload.partyId) {
-      const party = await Party.findById(payload.partyId).lean() as any;
+      const party = await getDocumentById("parties", String(payload.partyId));
       if (party && (party.name || party.companyName || "").toLowerCase().includes("walk-in")) {
         payload.amountReceived = payload.totalAmount;
         payload.balance = 0;
       }
     }
 
-    const row = await Invoice.findByIdAndUpdate(
-      params.id,
-      { $set: payload },
-      { new: true, runValidators: true }
-    );
+    const row = await updateDocument("invoices", params.id, payload);
 
     if (row) {
-      await generateInvoiceJournalEntries(row);
+      try {
+        await generateInvoiceJournalEntries(row);
+      } catch (journalErr) {
+        console.warn("Journal entry update skipped or non-fatal error:", journalErr);
+      }
     }
 
     const populated = row ? await getPopulatedInvoice(params.id) : null;
@@ -87,27 +81,21 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
     const role = session?.user?.role;
     const normalizedRole = (role || "").toLowerCase().replace(/\s+/g, "");
 
-    await dbConnect();
-
     if (normalizedRole === "sales_user" || normalizedRole === "salesuser") {
-      const existing = await Invoice.findById(params.id).lean();
+      const existing = await getDocumentById("invoices", params.id);
       if (!existing || ((existing as any).type !== "sale" && (existing as any).type !== "sale_return" && (existing as any).type !== "pos")) {
         return fail("Permission denied", 403);
       }
     }
     
-    // Get the invoice to extract partyId before deletion
-    const invoice = await Invoice.findById(params.id);
+    const invoice = await getDocumentById("invoices", params.id);
     const partyId = invoice?.partyId;
 
-    await Invoice.findByIdAndDelete(params.id);
+    await deleteDocument("invoices", params.id);
+    await deleteJournalEntriesByInvoiceId(params.id);
     
-    // Automatically delete associated journal entries
-    await JournalEntry.deleteMany({ invoiceId: params.id });
-    
-    // Recalculate party balance
     if (partyId) {
-      await recalculatePartyBalance(partyId.toString());
+      await recalculatePartyBalance(String(partyId));
     }
 
     return ok({ deleted: true });

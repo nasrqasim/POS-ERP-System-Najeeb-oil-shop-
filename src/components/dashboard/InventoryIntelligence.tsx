@@ -7,19 +7,14 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 
 export default function InventoryIntelligence() {
   const [activeTab, setActiveTab] = useState("Overview");
-  const [categoryData, setCategoryData] = useState<any[]>([
-    { name: 'Engine Oils', value: 450000, color: '#881337' },
-    { name: 'Transmission Fluids', value: 250000, color: '#be123c' },
-    { name: 'Industrial Lubes', value: 150000, color: '#e11d48' },
-    { name: 'Greases & Specs', value: 85000, color: '#fb7185' },
-  ]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchInv = async () => {
       try {
         const res = await fetch("/api/dashboard");
         const json = await res.json();
-        if (json.ok && json.data.categoryData?.length) {
+        if (json.ok && Array.isArray(json.data.categoryData)) {
           setCategoryData(json.data.categoryData);
         }
       } catch (e) {
@@ -97,15 +92,25 @@ export default function InventoryIntelligence() {
           <div className="space-y-6">
             <div className="flex gap-4">
               <div className="flex-1 h-48 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
-                      {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                    </Pie>
-                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', color: '#fff' }} formatter={(value) => `Rs. ${(value as number).toLocaleString()}`} />
-                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '9px', fontWeight: 'bold' }}/>
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="h-full w-full">
+                  {categoryData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={categoryData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
+                          {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                        </Pie>
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', color: '#fff' }} formatter={(value) => `Rs. ${(value as number).toLocaleString()}`} />
+                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '9px', fontWeight: 'bold' }}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400">
+                      <Box size={24} className="mb-2 opacity-40" />
+                      <p className="text-xs font-bold">No inventory categories yet</p>
+                      <p className="text-[10px] text-slate-400">Add products to populate categories</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

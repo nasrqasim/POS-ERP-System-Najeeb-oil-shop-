@@ -1,15 +1,18 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Location from "@/models/Location";
+import { getDocuments, updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    await dbConnect();
     if (body.isDefault) {
-      await Location.updateMany({ _id: { $ne: params.id } }, { isDefault: false });
+      const existing = await getDocuments("locations");
+      for (const loc of existing) {
+        if (loc._id !== params.id && loc.isDefault) {
+          await updateDocument("locations", loc._id, { isDefault: false });
+        }
+      }
     }
-    const row = await Location.findByIdAndUpdate(params.id, body, { new: true });
+    const row = await updateDocument("locations", params.id, body);
     if (!row) return fail("Location not found", 404);
     return ok(row);
   } catch (e) {
@@ -19,8 +22,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    await Location.findByIdAndDelete(params.id);
+    await deleteDocument("locations", params.id);
     return ok({ deleted: true });
   } catch (e) {
     return fail((e as Error).message);

@@ -1,60 +1,47 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import BankReceipt from "@/models/BankReceipt";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 import { postBankReceipt } from "@/services/posting/transactionPosting";
 import { recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
 
 export async function GET() {
-  await dbConnect();
-  const rows = await BankReceipt.aggregate([
-    {
-      $lookup: {
-        from: "parties",
-        let: { partyId: "$party" },
-        pipeline: [
-          { $match: { $expr: { $eq: [{ $toString: "$_id" }, "$$partyId"] } } }
-        ],
-        as: "partyData"
-      }
-    },
-    {
-      $lookup: {
-        from: "banks",
-        let: { bankId: "$bankAccount" },
-        pipeline: [
-          { $match: { $expr: { $eq: [{ $toString: "$_id" }, "$$bankId"] } } }
-        ],
-        as: "bankData"
-      }
-    },
-    {
-      $project: {
-        receiptNumber: 1,
-        date: 1,
-        amount: 1,
-        status: 1,
-        party: { $ifNull: [{ $arrayElemAt: ["$partyData.name", 0] }, "$party"] },
-        bankAccount: { $ifNull: [{ $arrayElemAt: ["$bankData.name", 0] }, "$bankAccount"] },
-        createdAt: 1
-      }
-    },
-    { $sort: { createdAt: -1 } }
-  ]);
-  return ok(rows);
+  try {
+    const bankReceipts = await getDocuments("bank_receipts");
+    const parties = await getDocuments("parties");
+    const banks = await getDocuments("banks");
+
+    const partyMap = new Map(parties.map((p: any) => [String(p._id), p.name || p.companyName]));
+    const bankMap = new Map(banks.map((b: any) => [String(b._id), b.name || b.bankName || b.title]));
+
+    const rows = bankReceipts.map((br: any) => {
+      const partyId = String(br.party || br.partyId || "");
+      const bankId = String(br.bankAccount || br.bankAccountId || "");
+      return {
+        ...br,
+        party: partyMap.get(partyId) || br.party || partyId,
+        bankAccount: bankMap.get(bankId) || br.bankAccount || bankId,
+      };
+    });
+
+    rows.sort((a: any, b: any) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-    
+
     if (!body.voucherNo || body.voucherNo === "Auto-generated") {
+      const existing = await getDocuments("bank_receipts");
+      let attempt = existing.length + 1;
       let isUnique = false;
-      let attempt = await BankReceipt.countDocuments() + 1;
       while (!isUnique) {
         const candidate = `BRV-${attempt.toString().padStart(5, "0")}`;
-        const existing = await BankReceipt.findOne({ receiptNumber: candidate });
-        if (!existing) {
+        const match = existing.find((e: any) => e.receiptNumber === candidate || e.voucherNo === candidate);
+        if (!match) {
           body.voucherNo = candidate;
           isUnique = true;
         } else {
@@ -66,20 +53,20 @@ export async function POST(req: Request) {
     const row = await postBankReceipt({
       voucherNo: body.voucherNo,
       date: body.date,
-      partyId: body.customerId,
-      bankId: body.bankAccountId,
-      amount: body.totalAmount,
-      netAmount: body.totalAmount,
+      partyId: body.customerId || body.partyId,
+      bankId: body.bankAccountId || body.bankAccount,
+      amount: Number(body.totalAmount || body.amount || 0),
+      netAmount: Number(body.totalAmount || body.amount || 0),
       narration: body.narration,
     });
 
-    if (body.customerId) await recalculatePartyBalance(String(body.customerId));
+    const partyId = body.customerId || body.partyId;
+    if (partyId) await recalculatePartyBalance(String(partyId));
 
     return ok(row, 201);
   } catch (e) {
     return fail((e as Error).message);
   }
 }
-
 
 export const dynamic = "force-dynamic";

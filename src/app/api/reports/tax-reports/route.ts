@@ -1,6 +1,5 @@
 import { ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Invoice from "@/models/Invoice";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 export async function GET(req: Request) {
   try {
@@ -8,63 +7,59 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("fromDate");
     const toDate = searchParams.get("toDate");
 
-    await dbConnect();
+    const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
+    const toTime = toDate ? new Date(toDate).getTime() : Infinity;
 
-    const match: any = { status: "posted" };
-    if (fromDate || toDate) {
-      match.date = {};
-      if (fromDate) match.date.$gte = new Date(fromDate);
-      if (toDate) match.date.$lte = new Date(toDate);
+    const invoices = await getDocuments("invoices");
+    const filtered = invoices.filter((inv: any) => {
+      if (inv.status !== "posted" && inv.status !== "Posted") return false;
+      const t = new Date(inv.date || 0).getTime();
+      return t >= fromTime && t <= toTime;
+    });
+
+    const monthlySummary: Record<string, any> = {};
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    for (const inv of filtered) {
+      const dt = new Date(inv.date || inv.createdAt || Date.now());
+      const period = `${monthNames[dt.getMonth()]} ${dt.getFullYear()}`;
+
+      if (!monthlySummary[period]) {
+        monthlySummary[period] = {
+          period,
+          sales: 0,
+          output: 0,
+          purchase: 0,
+          input: 0,
+          net: 0,
+          wht: 0
+        };
+      }
+
+      const invType = String(inv.type || "");
+      const subTotal = Number(inv.subTotal || inv.totalAmount || 0);
+      const taxAmount = Number(inv.taxAmount || 0);
+      const whtAmount = Number(inv.whtAmount || inv.wht || 0);
+
+      if (["sale", "non_tax_sale"].includes(invType)) {
+        monthlySummary[period].sales += subTotal;
+      }
+      if (["purchase", "non_tax_purchase", "import_purchase"].includes(invType)) {
+        monthlySummary[period].purchase += subTotal;
+      }
+      if (invType === "sale") {
+        monthlySummary[period].output += taxAmount;
+      }
+      if (["purchase", "import_purchase"].includes(invType)) {
+        monthlySummary[period].input += taxAmount;
+      }
+      monthlySummary[period].wht += whtAmount;
     }
 
-    const invoices = await Invoice.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: {
-            month: { $month: "$date" },
-            year: { $year: "$date" },
-            type: "$type"
-          },
-          salesAmount: { $sum: { $cond: [{ $in: ["$type", ["sale", "non_tax_sale"]] }, "$subTotal", 0] } },
-          purchaseAmount: { $sum: { $cond: [{ $in: ["$type", ["purchase", "non_tax_purchase", "import_purchase"]] }, "$subTotal", 0] } },
-          taxOutput: { $sum: { $cond: [{ $eq: ["$type", "sale"] }, "$taxAmount", 0] } },
-          taxInput: { $sum: { $cond: [{ $in: ["$type", ["purchase", "import_purchase"]] }, "$taxAmount", 0] } },
-          wht: { $sum: "$whtAmount" }
-        }
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1 } }
-    ]);
-
-    const reportData = invoices.map(inv => {
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      return {
-        period: `${monthNames[inv._id.month - 1]} ${inv._id.year}`,
-        sales: inv.salesAmount,
-        output: inv.taxOutput,
-        purchase: inv.purchaseAmount,
-        input: inv.taxInput,
-        net: inv.taxOutput - inv.taxInput,
-        wht: inv.wht
-      };
-    });
-
-    // Aggregate monthly
-    const monthlySummary: Record<string, any> = {};
-    reportData.forEach(row => {
-      if (!monthlySummary[row.period]) {
-        monthlySummary[row.period] = { ...row };
-      } else {
-        monthlySummary[row.period].sales += row.sales;
-        monthlySummary[row.period].output += row.output;
-        monthlySummary[row.period].purchase += row.purchase;
-        monthlySummary[row.period].input += row.input;
-        monthlySummary[row.period].net += row.net;
-        monthlySummary[row.period].wht += row.wht;
-      }
-    });
-
-    const finalRows = Object.values(monthlySummary);
+    const finalRows = Object.values(monthlySummary).map((row: any) => ({
+      ...row,
+      net: row.output - row.input
+    }));
 
     const totals = finalRows.reduce((acc: any, curr: any) => ({
       sales: acc.sales + curr.sales,

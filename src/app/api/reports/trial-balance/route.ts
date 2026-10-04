@@ -1,7 +1,5 @@
 import { ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Account from "@/models/Account";
-import JournalEntry from "@/models/JournalEntry";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 export async function GET(req: Request) {
   try {
@@ -9,60 +7,48 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("fromDate");
     const toDate = searchParams.get("toDate");
 
-    await dbConnect();
+    const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
+    const toTime = toDate ? new Date(toDate).getTime() : Infinity;
 
-    // 1. Fetch all accounts
-    const accounts = await Account.find().lean();
+    const accounts = await getDocuments("accounts");
+    const accountMap = new Map(accounts.map((a: any) => [a.code, a]));
 
-    // 2. Fetch journal entries to calculate balances
-    const match: any = {};
-    if (fromDate || toDate) {
-      match.date = {};
-      if (fromDate) match.date.$gte = new Date(fromDate);
-      if (toDate) match.date.$lte = new Date(toDate);
-    }
-
-    const journalBalances = await JournalEntry.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: "$accountCode",
-          debit: { $sum: "$debit" },
-          credit: { $sum: "$credit" },
-        },
-      },
-    ]);
-
-    const balanceMap = new Map();
-    journalBalances.forEach((jb) => {
-      balanceMap.set(jb._id, jb);
+    const entries = await getDocuments("journal_entries");
+    const filteredEntries = entries.filter((j: any) => {
+      const t = new Date(j.date || 0).getTime();
+      return t >= fromTime && t <= toTime;
     });
 
-    const journalTitles = await JournalEntry.aggregate([
-      { $match: match },
-      { $group: { _id: "$accountCode", title: { $first: "$accountTitle" } } }
-    ]);
-    const titleMap = new Map(journalTitles.map((t: any) => [t._id, t.title]));
-
-    const accountMap = new Map(accounts.map((a: any) => [a.code, a]));
+    const balanceMap = new Map<string, { debit: number; credit: number; title: string }>();
+    for (const j of filteredEntries) {
+      const code = j.accountCode;
+      if (!code) continue;
+      let curr = balanceMap.get(code);
+      if (!curr) {
+        curr = { debit: 0, credit: 0, title: j.accountTitle || "" };
+        balanceMap.set(code, curr);
+      }
+      curr.debit += Number(j.debit || 0);
+      curr.credit += Number(j.credit || 0);
+    }
 
     const reportData: any[] = [];
     
     balanceMap.forEach((journal, code) => {
-       const acc = accountMap.get(code);
-       const title = acc ? acc.title : (titleMap.get(code) || `Account ${code}`);
-       const type = acc ? acc.type : "Unknown";
+      const acc = accountMap.get(code);
+      const title = acc ? acc.title : (journal.title || `Account ${code}`);
+      const type = acc ? acc.type : "Unknown";
 
-       if (journal.debit > 0 || journal.credit > 0) {
-           reportData.push({
-               _id: acc ? acc._id : code,
-               code: code,
-               title: title,
-               type: type,
-               debit: journal.debit,
-               credit: journal.credit
-           });
-       }
+      if (journal.debit > 0 || journal.credit > 0) {
+        reportData.push({
+          _id: acc ? acc._id : code,
+          code: code,
+          title: title,
+          type: type,
+          debit: journal.debit,
+          credit: journal.credit
+        });
+      }
     });
 
     reportData.sort((a, b) => a.code.localeCompare(b.code));

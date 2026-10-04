@@ -113,6 +113,6 @@ export const config = {
     "/inventory/:path*",
     "/items/:path*",
     "/parties/:path*",
-    "/api/((?!auth).*)"
+    "/api/((?!auth|public).*)"
   ],
 };

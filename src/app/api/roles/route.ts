@@ -1,11 +1,10 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { Role } from "@/models/Role";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
   try {
-    await dbConnect();
-    const roles = await Role.find({}).sort({ createdAt: 1 });
+    const roles = await getDocuments("roles");
+    roles.sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
     return ok(roles);
   } catch (e) {
     return fail((e as Error).message);
@@ -19,12 +18,11 @@ export async function POST(req: Request) {
 
     if (!name) return fail("Role name is required");
 
-    await dbConnect();
-    
-    const existingRole = await Role.findOne({ name });
-    if (existingRole) return fail("Role name already exists");
+    const existingRoles = await getDocuments("roles");
+    const existing = existingRoles.find((r: any) => String(r.name).toLowerCase() === String(name).toLowerCase());
+    if (existing) return fail("Role name already exists");
 
-    const newRole = await Role.create({
+    const newRole = await createDocument("roles", {
       name,
       description: description || "",
       permissions: permissions || [],

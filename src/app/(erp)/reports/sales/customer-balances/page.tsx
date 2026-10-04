@@ -6,6 +6,7 @@ import { exportToExcel, printPage } from "@/lib/excel";
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import CustomerProfileHistory from "@/components/erp/maintain/CustomerProfileHistory";
+import { calculateCustomerBalance } from "@/lib/centralizedBalanceService";
 
 function formatBalance(val: number) {
   if (val > 0) return { text: `Rs. ${val.toLocaleString()}`, label: "(Debit)", color: "text-rose-600" };

@@ -1,19 +1,21 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Job from "@/models/Job";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
-  await dbConnect();
-  const rows = await Job.find().sort({ createdAt: -1 }).lean();
-  return ok(rows);
+  try {
+    const rows = await getDocuments("jobs");
+    rows.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     if (!body.jobNumber) body.jobNumber = body.code;
-    await dbConnect();
-    const row = await Job.create(body);
+    const row = await createDocument("jobs", body);
     return ok(row, 201);
   } catch (e) {
     return fail((e as Error).message);

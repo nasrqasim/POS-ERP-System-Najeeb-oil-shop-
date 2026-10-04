@@ -33,4 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# firebase credentials and migration backups
+firebase-service-account*.json
+scripts/migration/backups/
+scripts/migration/logs/
+
 .vercel

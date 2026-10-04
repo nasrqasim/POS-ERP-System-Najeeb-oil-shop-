@@ -1,6 +1,5 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { FinancialYear } from "@/models/FinancialYear";
+import { updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
 
 export async function PATCH(
   req: Request,
@@ -9,10 +8,7 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await req.json();
-    
-    await dbConnect();
-    const updatedYear = await FinancialYear.findByIdAndUpdate(id, body, { new: true });
-    
+    const updatedYear = await updateDocument("financial_years", id, body);
     return ok(updatedYear);
   } catch (e) {
     return fail((e as Error).message);
@@ -25,8 +21,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
-    await dbConnect();
-    await FinancialYear.findByIdAndDelete(id);
+    await deleteDocument("financial_years", id);
     return ok({ message: "Financial year deleted successfully" });
   } catch (e) {
     return fail((e as Error).message);

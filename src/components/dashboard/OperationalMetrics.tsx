@@ -5,32 +5,32 @@ import Link from "next/link";
 
 export default function OperationalMetrics() {
   const metrics = [
-    { title: "Order Fulfillment", value: "98.2%", target: "95.0%", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-50" },
-    { title: "Avg Delivery Time", value: "2.4 days", target: "4.0 days", icon: Clock, color: "text-blue-500", bg: "bg-blue-50" },
-    { title: "Return Rate", value: "1.8%", label: "Improving", icon: RotateCcw, color: "text-amber-500", bg: "bg-amber-50" },
-    { title: "Customer Satisfaction", value: "4.8/5", label: "NPS: 72", icon: Star, color: "text-indigo-500", bg: "bg-indigo-50" },
+    { title: "Order Fulfillment", value: "0.0%", target: "0.0%", icon: CheckCircle2, color: "text-slate-400", bg: "bg-slate-50" },
+    { title: "Avg Delivery Time", value: "0.0 days", target: "0.0 days", icon: Clock, color: "text-slate-400", bg: "bg-slate-50" },
+    { title: "Return Rate", value: "0.0%", label: "Neutral", icon: RotateCcw, color: "text-slate-400", bg: "bg-slate-50" },
+    { title: "Customer Satisfaction", value: "0.0/5", label: "NPS: 0", icon: Star, color: "text-slate-400", bg: "bg-slate-50" },
   ];
 
   const distributions = [
-    { label: "1-2 days", value: "35%", color: "bg-emerald-500" },
-    { label: "2-3 days", value: "40%", color: "bg-emerald-600" },
-    { label: "3-4 days", value: "18%", color: "bg-blue-500" },
-    { label: "4+ days", value: "7%", color: "bg-amber-500" },
+    { label: "1-2 days", value: "0%", color: "bg-slate-300" },
+    { label: "2-3 days", value: "0%", color: "bg-slate-300" },
+    { label: "3-4 days", value: "0%", color: "bg-slate-300" },
+    { label: "4+ days", value: "0%", color: "bg-slate-300" },
   ];
 
   const returnReasons = [
-    { label: "Defective", value: "35%", color: "bg-rose-500" },
-    { label: "Wrong Item", value: "25%", color: "bg-amber-500" },
-    { label: "Changed Mind", value: "22%", color: "bg-indigo-500" },
-    { label: "Damaged", value: "12%", color: "bg-emerald-500" },
+    { label: "Defective", value: "0%", color: "bg-slate-300" },
+    { label: "Wrong Item", value: "0%", color: "bg-slate-300" },
+    { label: "Changed Mind", value: "0%", color: "bg-slate-300" },
+    { label: "Damaged", value: "0%", color: "bg-slate-300" },
   ];
 
   const ratings = [
-    { star: 5, value: "40%", color: "bg-emerald-500" },
-    { star: 4, value: "30%", color: "bg-emerald-400" },
-    { star: 3, value: "20%", color: "bg-amber-400" },
-    { star: 2, value: "7%", color: "bg-rose-400" },
-    { star: 1, value: "3%", color: "bg-rose-600" },
+    { star: 5, value: "0%", color: "bg-slate-300" },
+    { star: 4, value: "0%", color: "bg-slate-300" },
+    { star: 3, value: "0%", color: "bg-slate-300" },
+    { star: 2, value: "0%", color: "bg-slate-300" },
+    { star: 1, value: "0%", color: "bg-slate-300" },
   ];
 
   return (

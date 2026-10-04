@@ -1,13 +1,16 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { User } from "@/models/User";
+import { getDocuments, createDocument } from "@/lib/firestore/genericRepository";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
   try {
-    await dbConnect();
-    const users = await User.find({}).sort({ createdAt: -1 }).select("-password");
-    return ok(users);
+    const users = await getDocuments("users");
+    const sanitized = users.map((u: any) => {
+      const { password, ...rest } = u;
+      return rest;
+    });
+    sanitized.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return ok(sanitized);
   } catch (e) {
     return fail((e as Error).message);
   }
@@ -22,21 +25,19 @@ export async function POST(req: Request) {
       return fail("Missing required fields");
     }
 
-    await dbConnect();
+    const allUsers = await getDocuments("users");
+    const existing = allUsers.find((u: any) => 
+      String(u.email || "").toLowerCase() === String(email).toLowerCase() ||
+      String(u.username || "").toLowerCase() === String(username).toLowerCase()
+    );
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { username }] 
-    });
-
-    if (existingUser) {
+    if (existing) {
       return fail("Email or Username already exists");
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await User.create({
+    const newUser = await createDocument("users", {
       name,
       email,
       username,
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       isActive: true
     });
 
-    const { password: _, ...userWithoutPassword } = newUser.toObject();
+    const { password: _, ...userWithoutPassword } = newUser;
     return ok(userWithoutPassword);
   } catch (e) {
     return fail((e as Error).message);

@@ -1,17 +1,28 @@
-import mongoose from "mongoose";
-
-function toObjectIdOrNull(value: unknown): mongoose.Types.ObjectId | null {
+function toStringIdOrNull(value: unknown): string | null {
   if (!value) return null;
+  if (typeof value === "object" && value !== null) {
+    if ("_id" in (value as any)) return String((value as any)._id);
+    if ("id" in (value as any)) return String((value as any).id);
+  }
   const str = String(value).trim();
-  if (!str || str === "cash" || str === "bank") return null;
-  if (!mongoose.Types.ObjectId.isValid(str)) return null;
-  return new mongoose.Types.ObjectId(str);
+  if (!str || str === "cash" || str === "bank" || str === "null" || str === "undefined") return null;
+  return str;
 }
 
-function toDateOrUndefined(value: unknown): Date | undefined {
+function toDateStringOrUndefined(value: unknown): string | undefined {
   if (!value) return undefined;
+  if (typeof value === "object" && value !== null) {
+    const v = value as any;
+    if (typeof v.toDate === "function") {
+      try { return v.toDate().toISOString(); } catch {}
+    }
+    const sec = typeof v._seconds === "number" ? v._seconds : v.seconds;
+    if (typeof sec === "number") {
+      try { return new Date(sec * 1000).toISOString(); } catch {}
+    }
+  }
   const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
 export function normalizeInvoiceLine(line: Record<string, unknown>) {
@@ -38,7 +49,7 @@ export function normalizeInvoiceLine(line: Record<string, unknown>) {
     priceType: line.priceType ?? "retail",
   };
 
-  const itemId = toObjectIdOrNull(line.itemId);
+  const itemId = toStringIdOrNull(line.itemId);
   if (itemId) normalized.itemId = itemId;
 
   if (line.foreignNetAmount != null) {
@@ -61,7 +72,7 @@ export function normalizeInvoicePayload(body: Record<string, unknown>) {
 
   const paymentKey = String(body.paymentAccountId ?? "").trim().toLowerCase();
   let paymentMethod = body.paymentMethod != null ? String(body.paymentMethod) : "Credit";
-  let paymentAccountId = toObjectIdOrNull(body.paymentAccountId);
+  let paymentAccountId = toStringIdOrNull(body.paymentAccountId);
   if (paymentKey === "cash") {
     paymentMethod = "Cash";
     paymentAccountId = null;
@@ -74,15 +85,17 @@ export function normalizeInvoicePayload(body: Record<string, unknown>) {
     invoiceNo: String(body.invoiceNo ?? ""),
     type: String(body.type ?? ""),
     paymentMethod,
-    date: toDateOrUndefined(body.date) ?? new Date(),
-    dueDate: toDateOrUndefined(body.dueDate),
-    partyId: toObjectIdOrNull(body.partyId),
+    date: toDateStringOrUndefined(body.date) ?? new Date().toISOString(),
+    dueDate: toDateStringOrUndefined(body.dueDate),
+    partyId: toStringIdOrNull(body.partyId),
+    partyName: body.partyName != null ? String(body.partyName) : body.customerName != null ? String(body.customerName) : undefined,
+    customerName: body.customerName != null ? String(body.customerName) : body.partyName != null ? String(body.partyName) : undefined,
     paymentTerms: body.paymentTerms != null ? String(body.paymentTerms) : "",
-    employeeId: toObjectIdOrNull(body.employeeId),
-    jobId: toObjectIdOrNull(body.jobId),
-    locationId: toObjectIdOrNull(body.locationId),
-    toLocationId: toObjectIdOrNull(body.toLocationId),
-    linkedInvoiceId: toObjectIdOrNull(body.linkedInvoiceId),
+    employeeId: toStringIdOrNull(body.employeeId),
+    jobId: toStringIdOrNull(body.jobId),
+    locationId: toStringIdOrNull(body.locationId),
+    toLocationId: toStringIdOrNull(body.toLocationId),
+    linkedInvoiceId: toStringIdOrNull(body.linkedInvoiceId),
     paymentAccountId,
     reference: String(linkRef || ""),
     vendorInvNo:
@@ -91,7 +104,7 @@ export function normalizeInvoicePayload(body: Record<string, unknown>) {
         : body.vendorInvoiceNo != null
           ? String(body.vendorInvoiceNo)
           : "",
-    vendorInvoiceDate: toDateOrUndefined(body.vendorInvoiceDate),
+    vendorInvoiceDate: toDateStringOrUndefined(body.vendorInvoiceDate),
     linkToGRN: body.linkToGRN != null ? String(body.linkToGRN) : "",
     linkToPO: body.linkToPO != null ? String(body.linkToPO) : "",
     currency: body.currency != null ? String(body.currency) : "PKR",
@@ -121,5 +134,13 @@ export function normalizeInvoicePayload(body: Record<string, unknown>) {
     lines,
   };
 
-  return payload;
+  // Remove any undefined keys so Firestore doesn't error out
+  const cleanPayload: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(payload)) {
+    if (val !== undefined) {
+      cleanPayload[key] = val;
+    }
+  }
+
+  return cleanPayload;
 }

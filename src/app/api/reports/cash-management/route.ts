@@ -1,68 +1,70 @@
 import { ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Account from "@/models/Account";
-import JournalEntry from "@/models/JournalEntry";
-import Invoice from "@/models/Invoice";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const fromDate = searchParams.get("fromDate") || new Date().toISOString();
-    const toDate = searchParams.get("toDate") || new Date().toISOString();
+    const fromDateStr = searchParams.get("fromDate");
+    const toDateStr = searchParams.get("toDate");
 
-    await dbConnect();
+    const fromTime = fromDateStr ? new Date(fromDateStr).getTime() : 0;
+    const toTime = toDateStr ? new Date(toDateStr).getTime() : Infinity;
 
-    // 1. Get cash/bank accounts
-    const cbAccounts = await Account.find({ type: { $in: ["cash", "bank"] } }).lean();
-    const cbCodes = cbAccounts.map((a: any) => a.code);
+    const accounts = await getDocuments("accounts");
+    const cbAccounts = accounts.filter((a: any) => ["cash", "bank"].includes(String(a.type || "").toLowerCase()));
+    const cbCodes = new Set(cbAccounts.map((a: any) => a.code));
 
-    // 2. Opening Balance
-    const openingRes = await JournalEntry.aggregate([
-      { $match: { accountCode: { $in: cbCodes }, date: { $lt: new Date(fromDate) } } },
-      { $group: { _id: null, balance: { $sum: { $subtract: ["$debit", "$credit"] } } } }
-    ]);
-    const openingBalance = openingRes[0]?.balance || 0;
+    const allEntries = await getDocuments("journal_entries");
 
-    // 3. Movements during period
-    const movements = await JournalEntry.aggregate([
-      { $match: { accountCode: { $in: cbCodes }, date: { $gte: new Date(fromDate), $lte: new Date(toDate) } } },
-      { $group: { _id: null, inflow: { $sum: "$debit" }, outflow: { $sum: "$credit" } } }
-    ]);
-    const totalInflow = movements[0]?.inflow || 0;
-    const totalOutflow = movements[0]?.outflow || 0;
+    let openingBalance = 0;
+    let totalInflow = 0;
+    let totalOutflow = 0;
+
+    for (const j of allEntries) {
+      if (!cbCodes.has(j.accountCode)) continue;
+      const t = new Date(j.date || 0).getTime();
+      const debit = Number(j.debit) || 0;
+      const credit = Number(j.credit) || 0;
+
+      if (t < fromTime) {
+        openingBalance += (debit - credit);
+      } else if (t >= fromTime && t <= toTime) {
+        totalInflow += debit;
+        totalOutflow += credit;
+      }
+    }
+
     const closingBalance = openingBalance + totalInflow - totalOutflow;
 
-    // 4. Upcoming Payables (posted but not paid)
-    const payables = await Invoice.find({
-      type: "purchase",
-      status: { $in: ["posted", "received"] },
-      dueDate: { $gte: new Date() }
-    }).populate("partyId").sort({ dueDate: 1 }).limit(10).lean();
+    const invoices = await getDocuments("invoices");
+    const parties = await getDocuments("parties");
+    const partyMap = new Map(parties.map((p: any) => [String(p._id), p.name || p.companyName]));
 
-    // 5. Expected Receivables
-    const receivables = await Invoice.find({
-      type: "sale",
-      status: { $in: ["posted", "delivered"] },
-      dueDate: { $gte: new Date() }
-    }).populate("partyId").sort({ dueDate: 1 }).limit(10).lean();
+    const payables = invoices.filter((p: any) => 
+      p.type === "purchase" && ["posted", "received"].includes(p.status)
+    ).map((p: any) => ({
+      vendor: partyMap.get(String(p.partyId)) || "Unknown",
+      invoiceNo: p.invoiceNo,
+      amount: p.totalAmount,
+      dueDate: p.dueDate
+    })).slice(0, 10);
+
+    const receivables = invoices.filter((r: any) => 
+      r.type === "sale" && ["posted", "delivered"].includes(r.status)
+    ).map((r: any) => ({
+      customer: partyMap.get(String(r.partyId)) || "Unknown",
+      invoiceNo: r.invoiceNo,
+      amount: r.totalAmount,
+      dueDate: r.dueDate
+    })).slice(0, 10);
 
     return ok({
       openingBalance,
       totalInflow,
       totalOutflow,
       closingBalance,
-      payables: payables.map((p: any) => ({
-        vendor: p.partyId?.name || "Unknown",
-        invoiceNo: p.invoiceNo,
-        amount: p.totalAmount,
-        dueDate: p.dueDate
-      })),
-      receivables: receivables.map((r: any) => ({
-        customer: r.partyId?.name || "Unknown",
-        invoiceNo: r.invoiceNo,
-        amount: r.totalAmount,
-        dueDate: r.dueDate
-      })),
+      payables,
+      receivables,
       waterfall: [
         { name: 'Opening', value: openingBalance, type: 'total' },
         { name: 'Total Inflow', value: totalInflow, type: 'inflow' },

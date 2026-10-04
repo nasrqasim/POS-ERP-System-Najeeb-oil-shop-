@@ -756,6 +756,8 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
       type: "sale",
       date: formData.date || new Date().toISOString(),
       partyId: formData.customerId || null,
+      partyName: formData.customerName || "Walk-in Customer",
+      customerName: formData.customerName || "Walk-in Customer",
       regNo: formData.vehicleNo,
       vehicleNo: formData.vehicleNo,
       rangeKms: formData.rangeKms,
@@ -867,7 +869,7 @@ export default function SaleInvoiceForm({ onClose, initialData }: SaleInvoiceFor
               if (line.liters) qtyParts.push(`${line.liters}L`);
               records.push({
                 invoiceNo: inv.invoiceNo,
-                date: new Date(inv.date).toLocaleDateString(),
+                date: inv.date ? (typeof inv.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(inv.date) ? inv.date.split('T')[0] : new Date(inv.date).toLocaleDateString()) : "-",
                 customer: inv.partyId?.name || "Walk-in",
                 quantity: qtyParts.join(", ") || "0",
                 rate: line.rate || 0,

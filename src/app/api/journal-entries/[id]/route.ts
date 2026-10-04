@@ -1,44 +1,43 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import JournalEntry from "@/models/JournalEntry";
-import CashPayment from "@/models/CashPayment";
-import CashReceipt from "@/models/CashReceipt";
-import { recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
+import { getDocuments, getDocumentById, createDocument, deleteDocument } from "@/lib/firestore/genericRepository";
+import { recalculatePartyBalance, deleteJournalEntriesByVoucherNo } from "@/services/posting/invoicePostingHelper";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
     const body = await req.json();
-    await dbConnect();
 
-    // Find the original journal entry to get its voucherNo and date
-    const original = await JournalEntry.findById(id);
+    const original = await getDocumentById("journal_entries", id);
     if (!original) return fail("Journal entry not found");
 
     const oldVoucherNo = original.voucherNo;
 
-    // Delete existing entries with the same voucherNo
-    await JournalEntry.deleteMany({ voucherNo: oldVoucherNo });
+    await deleteJournalEntriesByVoucherNo(oldVoucherNo);
 
-    // Re-create new journal entries (debit and credit)
     const newEntries = Array.isArray(body.entries) ? body.entries : [body];
-    const created = await JournalEntry.create(newEntries);
+    const created = [];
+    for (const entry of newEntries) {
+      const row = await createDocument("journal_entries", entry);
+      created.push(row);
+    }
 
-    // Sync CashPayment or CashReceipt if party is involved
     const partyId = body.partyId;
-    const partyType = body.partyType; // "customer" or "vendor"
+    const partyType = body.partyType;
 
-    // Clean up old cash records
-    const oldPayment = await CashPayment.findOneAndDelete({ voucherNo: oldVoucherNo });
-    if (oldPayment?.partyId) {
-      await recalculatePartyBalance(String(oldPayment.partyId));
-    }
-    const oldReceipt = await CashReceipt.findOneAndDelete({ receiptNumber: oldVoucherNo });
-    if (oldReceipt?.partyId) {
-      await recalculatePartyBalance(String(oldReceipt.partyId));
+    const allPayments = await getDocuments("cash_payments");
+    const oldPayments = allPayments.filter((p: any) => p.voucherNo === oldVoucherNo);
+    for (const p of oldPayments) {
+      await deleteDocument("cash_payments", p._id);
+      if (p.partyId) await recalculatePartyBalance(String(p.partyId));
     }
 
-    // Create new cash record if party is selected
+    const allReceipts = await getDocuments("cash_receipts");
+    const oldReceipts = allReceipts.filter((r: any) => r.receiptNumber === oldVoucherNo);
+    for (const r of oldReceipts) {
+      await deleteDocument("cash_receipts", r._id);
+      if (r.partyId) await recalculatePartyBalance(String(r.partyId));
+    }
+
     if (partyId && partyType) {
       const amount = Number(body.amount) || 0;
       const date = body.date || new Date().toISOString().split("T")[0];
@@ -46,11 +45,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const voucherNo = body.voucherNo || oldVoucherNo;
 
       if (partyType === "vendor") {
-        await CashPayment.create({
+        await createDocument("cash_payments", {
           voucherNo,
           paymentType: "party",
           date,
-          partyId,
+          partyId: String(partyId),
           vendor: String(partyId),
           amount,
           narration: remarks,
@@ -58,11 +57,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         });
         await recalculatePartyBalance(String(partyId));
       } else if (partyType === "customer") {
-        await CashReceipt.create({
+        await createDocument("cash_receipts", {
           receiptNumber: voucherNo,
           receiptType: "party",
           date,
-          partyId,
+          partyId: String(partyId),
           amount,
           narration: remarks,
           status: "Posted",
@@ -80,24 +79,25 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    await dbConnect();
-
-    const entry = await JournalEntry.findById(id);
+    const entry = await getDocumentById("journal_entries", id);
     if (!entry) return fail("Journal entry not found");
 
     const voucherNo = entry.voucherNo;
 
-    // Delete all journal entries with the same voucherNo
-    await JournalEntry.deleteMany({ voucherNo });
+    await deleteJournalEntriesByVoucherNo(voucherNo);
 
-    // Clean up cash records if any
-    const payment = await CashPayment.findOneAndDelete({ voucherNo });
-    if (payment?.partyId) {
-      await recalculatePartyBalance(String(payment.partyId));
+    const allPayments = await getDocuments("cash_payments");
+    const oldPayments = allPayments.filter((p: any) => p.voucherNo === voucherNo);
+    for (const p of oldPayments) {
+      await deleteDocument("cash_payments", p._id);
+      if (p.partyId) await recalculatePartyBalance(String(p.partyId));
     }
-    const receipt = await CashReceipt.findOneAndDelete({ receiptNumber: voucherNo });
-    if (receipt?.partyId) {
-      await recalculatePartyBalance(String(receipt.partyId));
+
+    const allReceipts = await getDocuments("cash_receipts");
+    const oldReceipts = allReceipts.filter((r: any) => r.receiptNumber === voucherNo);
+    for (const r of oldReceipts) {
+      await deleteDocument("cash_receipts", r._id);
+      if (r.partyId) await recalculatePartyBalance(String(r.partyId));
     }
 
     return ok({ message: "Deleted successfully" });

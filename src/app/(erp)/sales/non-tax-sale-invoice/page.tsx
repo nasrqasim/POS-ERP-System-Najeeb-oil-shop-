@@ -197,8 +197,8 @@ export default function NonTaxSaleInvoicePage() {
                     <td className="px-8 py-5">
                       <span className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-maroon-800 transition-colors">{inv.invoiceNo}</span>
                     </td>
-                    <td className="px-8 py-5 text-sm font-bold text-slate-600 dark:text-slate-300">{inv.date ? inv.date.split('T')[0] : "-"}</td>
-                    <td className="px-8 py-5 text-sm font-bold text-slate-700 dark:text-slate-200">{inv.partyId?.companyName || inv.partyId?.name || inv.customer}</td>
+                    <td className="px-8 py-5 text-sm font-bold text-slate-600 dark:text-slate-300">{inv.date ? (typeof inv.date === 'string' ? inv.date.split('T')[0] : new Date(inv.date).toLocaleDateString()) : "-"}</td>
+                    <td className="px-8 py-5 text-sm font-bold text-slate-700 dark:text-slate-200">{(typeof inv.partyId === "object" ? (inv.partyId?.companyName || inv.partyId?.name) : "") || inv.partyName || inv.customerName || inv.customer || (inv.partyId ? String(inv.partyId) : "Walk-in Customer")}</td>
                     <td className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest">
                       {inv.reference || inv.linkedRef}
                     </td>

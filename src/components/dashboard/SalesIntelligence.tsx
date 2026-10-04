@@ -49,19 +49,8 @@ export default function SalesIntelligence() {
     { name: "West Region", value: 95000, fill: "#fb7185" },
   ];
 
-  const defaultProductsData = [
-    { name: "Premium Engine Oil 5W-40", qty: "450 L", amount: "Rs.150,000", trend: "+12%" },
-    { name: "Industrial Lubricant XP", qty: "320 L", amount: "Rs.85,000", trend: "+5%" },
-    { name: "Brake Fluid DOT 4", qty: "280 L", amount: "Rs.42,000", trend: "-2%" },
-    { name: "Heavy Duty Gear Oil", qty: "150 L", amount: "Rs.35,000", trend: "+8%" },
-  ];
-
-  const defaultCustomersData = [
-    { name: "Alpha Transport Co.", type: "B2B", amount: "Rs.125,000", orders: 12 },
-    { name: "Delta Logistics", type: "B2B", amount: "Rs.85,000", orders: 8 },
-    { name: "General Customer", type: "Retail", amount: "Rs.45,000", orders: 24 },
-    { name: "Omega Industries", type: "B2B", amount: "Rs.32,000", orders: 3 },
-  ];
+  const defaultProductsData: any[] = [];
+  const defaultCustomersData: any[] = [];
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-8 shadow-sm border border-slate-100 dark:border-slate-800 h-full flex flex-col transition-all duration-300">
@@ -162,45 +151,61 @@ export default function SalesIntelligence() {
 
         {activeTab === "Products" && (
           <div className="space-y-3">
-            {(productsData.length ? productsData : defaultProductsData).map((product, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500 flex items-center justify-center text-[10px] font-black group-hover:bg-maroon-50 dark:group-hover:bg-maroon-900/30 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">
-                    #{idx + 1}
+            {productsData.length > 0 ? (
+              productsData.map((product, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500 flex items-center justify-center text-[10px] font-black group-hover:bg-maroon-50 dark:group-hover:bg-maroon-900/30 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">
+                      #{idx + 1}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{product.name}</p>
+                      <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">{product.qty} Sold</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{product.name}</p>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">{product.qty} Sold</p>
+                  <div className="text-right">
+                    <p className="text-xs font-black text-slate-800 dark:text-slate-100">{product.amount}</p>
+                    <p className={`text-[9px] font-black mt-0.5 ${product.trend?.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{product.trend || '+5%'}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-black text-slate-800 dark:text-slate-100">{product.amount}</p>
-                  <p className={`text-[9px] font-black mt-0.5 ${product.trend?.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{product.trend || '+5%'}</p>
-                </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <Package size={24} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No product sales yet</p>
+                <p className="text-[10px] text-slate-400">Products sold will appear here</p>
               </div>
-            ))}
+            )}
           </div>
         )}
 
         {activeTab === "Customers" && (
           <div className="space-y-3">
-            {(customersData.length ? customersData : defaultCustomersData).map((customer, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <Award size={14} />
+            {customersData.length > 0 ? (
+              customersData.map((customer, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <Award size={14} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{customer.name}</p>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1 inline-block">{customer.type}</span>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{customer.name}</p>
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1 inline-block">{customer.type}</span>
+                  <div className="text-right">
+                    <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">{customer.amount}</p>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">{customer.orders} orders</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">{customer.amount}</p>
-                  <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">{customer.orders} orders</p>
-                </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <Users size={24} className="mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">No customer invoices yet</p>
+                <p className="text-[10px] text-slate-400">Top customers will appear here</p>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

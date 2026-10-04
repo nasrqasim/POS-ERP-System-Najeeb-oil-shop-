@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Printer, Search, RefreshCw, Filter, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { matchesEntity } from "@/lib/centralizedBalanceService";
 
 export default function ReceivablesPage() {
   const router = useRouter();
@@ -65,18 +66,19 @@ export default function ReceivablesPage() {
 
   // Define Date range for filters
   const dateRange = useMemo(() => {
+    const now = new Date();
     let start = new Date(0);
     let end = new Date("2100-01-01");
 
     if (selectedPeriod === "daily") {
-      start = new Date(todayDate); start.setHours(0,0,0,0);
-      end = new Date(todayDate); end.setHours(23,59,59,999);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (selectedPeriod === "monthly") {
-      start = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1, 0,0,0,0);
-      end = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0, 23,59,59,999);
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (selectedPeriod === "yearly") {
-      start = new Date(todayDate.getFullYear(), 0, 1, 0,0,0,0);
-      end = new Date(todayDate.getFullYear(), 11, 31, 23,59,59,999);
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
     }
 
     return { start, end };
@@ -88,58 +90,55 @@ export default function ReceivablesPage() {
     let sales = 0;
     let receipts = 0;
 
+    // 1. Initial opening balance from registered customers
     customers.forEach(cust => {
-      // initial opening balance in DB is debit if positive
-      const initialOpening = Number(cust.openingBalance) || 0;
-      let beforeSales = 0;
-      let beforeReceipts = 0;
-      let periodSales = 0;
-      let periodReceipts = 0;
+      opening += Number(cust.openingBalance) || 0;
+    });
 
-      // Invoices
-      invoices.forEach(inv => {
-        if (inv.partyId?._id === cust._id || inv.partyId === cust._id) {
-          const invDate = new Date(inv.date || inv.createdAt);
-          const isSale = ["sale", "non_tax_sale", "pos", "challan"].includes(inv.type);
-          const isReturn = ["sale_return", "non_tax_sale_return"].includes(inv.type);
+    // 2. Count ALL invoices across the system
+    invoices.forEach(inv => {
+      if (inv.status === "cancelled" || inv.status === "Cancelled") return;
+      const invDate = new Date(inv.date || inv.createdAt);
+      const isSale = ["sale", "non_tax_sale", "pos", "challan", "pos_counter_sale", "tax_sale", "sale_invoice"].includes(inv.type);
+      const isReturn = ["sale_return", "non_tax_sale_return", "pos_return"].includes(inv.type);
+      const total = Number(inv.totalAmount) || 0;
 
-          if (invDate.getTime() < start.getTime()) {
-            if (isSale) beforeSales += inv.totalAmount || 0;
-            if (isReturn) beforeReceipts += inv.totalAmount || 0;
-          } else if (invDate.getTime() <= end.getTime()) {
-            if (isSale) periodSales += inv.totalAmount || 0;
-            if (isReturn) periodReceipts += inv.totalAmount || 0;
-          }
+      const isCredit = (inv.paymentMethod || "").toLowerCase() === "credit" || inv.isCreditBill;
+      const amtRecv = Number(inv.amountReceived) || 0;
+      const inInvoicePaid = isCredit ? Math.min(total, amtRecv) : total;
+
+      if (invDate.getTime() < start.getTime()) {
+        if (isSale) {
+          opening += total;
+          opening -= inInvoicePaid;
         }
-      });
-
-      // Cash Receipts
-      cashReceipts.forEach(cr => {
-        if ((cr.partyId?._id === cust._id || cr.partyId === cust._id || cr.party === cust._id) && cr.status !== "Cancelled") {
-          const crDate = new Date(cr.date || cr.createdAt);
-          if (crDate.getTime() < start.getTime()) {
-            beforeReceipts += cr.amount || 0;
-          } else if (crDate.getTime() <= end.getTime()) {
-            periodReceipts += cr.amount || 0;
-          }
+        if (isReturn) opening -= total;
+      } else if (invDate.getTime() <= end.getTime()) {
+        if (isSale) {
+          sales += total;
+          receipts += inInvoicePaid;
         }
-      });
+        if (isReturn) receipts += total;
+      }
+    });
 
-      // Bank Receipts
-      bankReceipts.forEach(br => {
-        if ((br.partyId?._id === cust._id || br.partyId === cust._id || br.party === cust._id) && br.status !== "Cancelled") {
-          const brDate = new Date(br.date || br.createdAt);
-          if (brDate.getTime() < start.getTime()) {
-            beforeReceipts += br.amount || 0;
-          } else if (brDate.getTime() <= end.getTime()) {
-            periodReceipts += br.amount || 0;
-          }
-        }
-      });
+    // 3. Count ALL cash & bank receipts
+    cashReceipts.forEach(cr => {
+      if (cr.status !== "Cancelled") {
+        const crDate = new Date(cr.date || cr.createdAt);
+        const amt = Number(cr.amount) || 0;
+        if (crDate.getTime() < start.getTime()) opening -= amt;
+        else if (crDate.getTime() <= end.getTime()) receipts += amt;
+      }
+    });
 
-      opening += (initialOpening + beforeSales - beforeReceipts);
-      sales += periodSales;
-      receipts += periodReceipts;
+    bankReceipts.forEach(br => {
+      if (br.status !== "Cancelled") {
+        const brDate = new Date(br.date || br.createdAt);
+        const amt = Number(br.amount) || 0;
+        if (brDate.getTime() < start.getTime()) opening -= amt;
+        else if (brDate.getTime() <= end.getTime()) receipts += amt;
+      }
     });
 
     return { opening, sales, receipts, current: opening + sales - receipts };
@@ -147,9 +146,19 @@ export default function ReceivablesPage() {
 
   // Top summary widgets
   const summaries = useMemo(() => {
-    const daily = getPeriodReceivables(new Date(todayDate.setHours(0,0,0,0)), new Date(todayDate.setHours(23,59,59,999)));
-    const monthly = getPeriodReceivables(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1), new Date(todayDate.getFullYear(), todayDate.getMonth()+1, 0, 23,59,59));
-    const yearly = getPeriodReceivables(new Date(todayDate.getFullYear(), 0, 1), new Date(todayDate.getFullYear(), 11, 31, 23,59,59));
+    const now = new Date();
+    const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const mStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const mEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const yStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const yEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+
+    const daily = getPeriodReceivables(dStart, dEnd);
+    const monthly = getPeriodReceivables(mStart, mEnd);
+    const yearly = getPeriodReceivables(yStart, yEnd);
     const overall = getPeriodReceivables(new Date(0), new Date("2100-01-01"));
     return { daily, monthly, yearly, overall };
   }, [customers, invoices, cashReceipts, bankReceipts]);
@@ -158,7 +167,26 @@ export default function ReceivablesPage() {
   const rows = useMemo(() => {
     const now = new Date();
     
-    return customers.map(cust => {
+    const customerList = [...customers];
+    const knownCustIds = new Set(customers.map((c: any) => String(c._id || c.id)));
+    invoices.forEach((inv: any) => {
+      const pId = inv.partyId?._id || inv.partyId;
+      const pName = inv.partyId?.companyName || inv.partyId?.name || inv.partyName || inv.customerName || inv.customer || "Walk-in Customer";
+      const key = pId ? String(pId) : `synthetic_${pName}`;
+      if (!knownCustIds.has(key)) {
+        knownCustIds.add(key);
+        customerList.push({
+          _id: key,
+          id: key,
+          name: pName,
+          companyName: pName,
+          openingBalance: 0,
+          type: "Customer"
+        });
+      }
+    });
+
+    return customerList.map(cust => {
       // initial opening balance in DB is debit if positive
       const initialOpening = Number(cust.openingBalance) || 0;
       let beforeSales = 0;

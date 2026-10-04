@@ -1,14 +1,12 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { User } from "@/models/User";
+import { createDocument } from "@/lib/firestore/genericRepository";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
     const hashed = await bcrypt.hash(body.password, 10);
-    const user = await User.create({
+    const user = await createDocument("users", {
       username: body.username,
       password: hashed,
       role: body.role ?? "admin",

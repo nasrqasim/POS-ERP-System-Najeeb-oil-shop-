@@ -1,31 +1,21 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Category from "@/models/Category";
-import Item from "@/models/Item";
+import { getDocuments, updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    
-    // Check if any items are using this category or sub-category
-    const itemsUsing = await Item.findOne({ 
-      $or: [
-        { mainCategoryId: params.id },
-        { subCategoryId: params.id }
-      ] 
-    });
-
+    const items = await getDocuments("items");
+    const itemsUsing = items.find((i: any) => String(i.mainCategoryId) === String(params.id) || String(i.subCategoryId) === String(params.id));
     if (itemsUsing) {
       return fail("Cannot delete category. There are items associated with it.");
     }
 
-    // If it's a main category, check if it has sub-categories
-    const hasSubs = await Category.findOne({ parentId: params.id });
+    const categories = await getDocuments("categories");
+    const hasSubs = categories.find((c: any) => String(c.parentId) === String(params.id));
     if (hasSubs) {
       return fail("Cannot delete category. It has sub-categories associated with it.");
     }
 
-    await Category.findByIdAndDelete(params.id);
+    await deleteDocument("categories", params.id);
     return ok({ message: "Deleted successfully" });
   } catch (e) {
     return fail((e as Error).message);
@@ -33,12 +23,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 }
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
-    try {
-        const body = await req.json();
-        await dbConnect();
-        const row = await Category.findByIdAndUpdate(params.id, body, { new: true });
-        return ok(row);
-    } catch (e) {
-        return fail((e as Error).message);
-    }
+  try {
+    const body = await req.json();
+    const row = await updateDocument("categories", params.id, body);
+    return ok(row);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }

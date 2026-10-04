@@ -22,6 +22,7 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [time, setTime] = useState("");
   const [dateStr, setDateStr] = useState("");
+  const [healthScore, setHealthScore] = useState(0);
 
   useEffect(() => {
     // Sync initial theme
@@ -43,6 +44,26 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
     };
     updateClock();
     const clockInterval = setInterval(updateClock, 60000);
+
+    // Dynamic Business Health calculation from live dashboard data
+    fetch("/api/dashboard")
+      .then(res => res.json())
+      .then(json => {
+        if (json.ok) {
+          const d = json.data;
+          const hasActivity = (d.salesCount || 0) > 0 || (d.purchaseCount || 0) > 0 || (d.totalStockValue || 0) > 0;
+          if (!hasActivity) {
+            setHealthScore(0);
+          } else {
+            let score = 50;
+            if (d.totalSales > 0) score += 20;
+            if (d.totalStockValue > 0) score += 15;
+            if (d.workingCapital >= 0) score += 15;
+            setHealthScore(Math.min(100, score));
+          }
+        }
+      })
+      .catch(() => setHealthScore(0));
 
     return () => {
       window.removeEventListener("theme-changed", handleThemeChange as any);
@@ -125,17 +146,19 @@ export default function DashboardHero({ userName }: DashboardHeroProps) {
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className={circleTrack} />
                   <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent"
-                    strokeDasharray="226" strokeDashoffset="25"
-                    className="text-emerald-400 transition-all duration-1000"
+                    strokeDasharray="226" strokeDashoffset={226 - (226 * healthScore) / 100}
+                    className={`${healthScore > 0 ? "text-emerald-400" : "text-slate-500"} transition-all duration-1000`}
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-white">
-                  89%
+                  {healthScore}%
                 </div>
               </div>
               <div>
                 <p className={`text-xs font-medium uppercase ${mutedText}`}>Business Health</p>
-                <h3 className="text-xl font-black text-emerald-400">Excellent</h3>
+                <h3 className={`text-xl font-black ${healthScore > 75 ? "text-emerald-400" : healthScore > 0 ? "text-amber-400" : "text-slate-400"}`}>
+                  {healthScore > 75 ? "Excellent" : healthScore > 0 ? "Moderate" : "Neutral (0 Data)"}
+                </h3>
               </div>
             </div>
 

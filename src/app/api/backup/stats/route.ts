@@ -1,60 +1,48 @@
 import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
-import Account from "@/models/Account";
-import Category from "@/models/Category";
-import { DocumentSetting } from "@/models/DocumentSetting";
-import Employee from "@/models/Employee";
-import { FinancialYear } from "@/models/FinancialYear";
-import { InventorySetting } from "@/models/InventorySetting";
-import Invoice from "@/models/Invoice";
-import Item from "@/models/Item";
-import Journal from "@/models/Journal";
-import JournalEntry from "@/models/JournalEntry";
-import Party from "@/models/Party";
-import Payroll from "@/models/Payroll";
-import { PrintFormat } from "@/models/PrintFormat";
-import { Role } from "@/models/Role";
-import ShopProfile from "@/models/ShopProfile";
-import { User } from "@/models/User";
-import VehicleLog from "@/models/VehicleLog";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
   try {
-    await dbConnect();
+    const [
+      accounts,
+      categories,
+      employees,
+      invoices,
+      items,
+      cashReceipts,
+      bankPayments,
+      parties,
+      payrolls,
+      users
+    ] = await Promise.all([
+      getDocuments("accounts"),
+      getDocuments("categories"),
+      getDocuments("employees"),
+      getDocuments("invoices"),
+      getDocuments("items"),
+      getDocuments("cash_receipts"),
+      getDocuments("bank_payments"),
+      getDocuments("parties"),
+      getDocuments("payrolls"),
+      getDocuments("users")
+    ]);
 
-    const modelMappings = [
-      { name: "Bank Accounts", model: Account, sampleCount: 2 },
-      { name: "Categories", model: Category, sampleCount: 5 },
-      { name: "Employees", model: Employee, sampleCount: 12 },
-      { name: "Invoices", model: Invoice, sampleCount: 24 },
-      { name: "Inventory Items", model: Item, sampleCount: 156 },
-      { name: "Cash Receipts", model: null, sampleCount: 18 },
-      { name: "Bank Payments", model: null, sampleCount: 9 },
-      { name: "Customers", model: Party, sampleCount: 42 },
-      { name: "Vendors", model: Party, sampleCount: 15 },
-      { name: "Payroll Records", model: Payroll, sampleCount: 12 },
-      { name: "Users", model: User, sampleCount: 4 },
+    const customers = parties.filter((p: any) => p.type === "Customer");
+    const vendors = parties.filter((p: any) => p.type === "Vendor");
+
+    const stats = [
+      { name: "Bank Accounts", count: accounts.length, status: "ok" },
+      { name: "Categories", count: categories.length, status: "ok" },
+      { name: "Employees", count: employees.length, status: "ok" },
+      { name: "Invoices", count: invoices.length, status: "ok" },
+      { name: "Inventory Items", count: items.length, status: "ok" },
+      { name: "Cash Receipts", count: cashReceipts.length, status: "ok" },
+      { name: "Bank Payments", count: bankPayments.length, status: "ok" },
+      { name: "Customers", count: customers.length, status: "ok" },
+      { name: "Vendors", count: vendors.length, status: "ok" },
+      { name: "Payroll Records", count: payrolls.length, status: "ok" },
+      { name: "Users", count: users.length, status: "ok" },
     ];
-
-    const stats = await Promise.all(
-      modelMappings.map(async ({ name, model, sampleCount }) => {
-        try {
-          let count = 0;
-          if (model) {
-            count = await model.countDocuments({});
-          }
-          
-          // If DB is empty, use sample counts for the prototype/demo experience
-          if (count === 0) {
-            count = sampleCount;
-          }
-
-          return { name, count, status: "ok" };
-        } catch (err: any) {
-          return { name, count: sampleCount, status: "demo", error: err.message };
-        }
-      })
-    );
 
     return NextResponse.json({ stats });
   } catch (error: any) {

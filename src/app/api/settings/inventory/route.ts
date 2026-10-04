@@ -1,13 +1,12 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { InventorySetting } from "@/models/InventorySetting";
+import { getDocuments, createDocument, updateDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET() {
   try {
-    await dbConnect();
-    let setting = await InventorySetting.findOne({});
+    const list = await getDocuments("inventory_settings");
+    let setting = list[0];
     if (!setting) {
-      setting = await InventorySetting.create({});
+      setting = await createDocument("inventory_settings", {});
     }
     return ok(setting);
   } catch (e) {
@@ -18,13 +17,13 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
-    
-    const updatedSetting = await InventorySetting.findOneAndUpdate(
-      {},
-      { ...body },
-      { upsert: true, new: true }
-    );
+    const list = await getDocuments("inventory_settings");
+    let updatedSetting;
+    if (list.length > 0) {
+      updatedSetting = await updateDocument("inventory_settings", list[0]._id, body);
+    } else {
+      updatedSetting = await createDocument("inventory_settings", body);
+    }
 
     return ok(updatedSetting);
   } catch (e) {

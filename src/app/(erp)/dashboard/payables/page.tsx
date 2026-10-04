@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Printer, Search, RefreshCw, Filter } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { matchesEntity } from "@/lib/centralizedBalanceService";
 
 export default function PayablesPage() {
   const router = useRouter();
@@ -75,18 +76,19 @@ export default function PayablesPage() {
 
   // Define Date range for filters
   const dateRange = useMemo(() => {
+    const now = new Date();
     let start = new Date(0);
     let end = new Date("2100-01-01");
 
     if (selectedPeriod === "daily") {
-      start = new Date(todayDate); start.setHours(0,0,0,0);
-      end = new Date(todayDate); end.setHours(23,59,59,999);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (selectedPeriod === "monthly") {
-      start = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1, 0,0,0,0);
-      end = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0, 23,59,59,999);
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (selectedPeriod === "yearly") {
-      start = new Date(todayDate.getFullYear(), 0, 1, 0,0,0,0);
-      end = new Date(todayDate.getFullYear(), 11, 31, 23,59,59,999);
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
     }
 
     return { start, end };
@@ -99,58 +101,51 @@ export default function PayablesPage() {
     let payments = 0;
 
     vendors.forEach(vend => {
-      const initialOpening = Number(vend.openingBalance) || 0;
-      let beforePurchases = 0;
-      let beforePayments = 0;
-      let periodPurchases = 0;
-      let periodPayments = 0;
+      opening += Number(vend.openingBalance) || 0;
+    });
 
-      // Invoices
-      invoices.forEach(inv => {
-        if (inv.partyId?._id === vend._id || inv.partyId === vend._id) {
-          const invDate = new Date(inv.date || inv.createdAt);
-          const isPurchase = ["purchase", "non_tax_purchase", "import_purchase"].includes(inv.type);
-          const isReturn = ["purchase_return", "non_tax_purchase_return"].includes(inv.type);
+    invoices.forEach(inv => {
+      if (inv.status === "cancelled" || inv.status === "Cancelled") return;
+      const invDate = new Date(inv.date || inv.createdAt);
+      const isPurchase = ["purchase", "non_tax_purchase", "import_purchase", "tax_purchase", "purchase_invoice"].includes(inv.type);
+      const isReturn = ["purchase_return", "non_tax_purchase_return"].includes(inv.type);
+      const total = Number(inv.totalAmount) || 0;
 
-          if (invDate.getTime() < start.getTime()) {
-            if (isPurchase) beforePurchases += inv.totalAmount || 0;
-            if (isReturn) beforePayments += inv.totalAmount || 0;
-          } else if (invDate.getTime() <= end.getTime()) {
-            if (isPurchase) periodPurchases += inv.totalAmount || 0;
-            if (isReturn) periodPayments += inv.totalAmount || 0;
-          }
+      const isCredit = (inv.paymentMethod || "").toLowerCase() === "credit" || inv.isCreditBill;
+      const amtPaid = Number(inv.amountPaid) || Number(inv.amountReceived) || 0;
+      const inInvoicePaid = isCredit ? Math.min(total, amtPaid) : total;
+
+      if (invDate.getTime() < start.getTime()) {
+        if (isPurchase) {
+          opening += total;
+          opening -= inInvoicePaid;
         }
-      });
-
-      // Cash Payments
-      cashPayments.forEach(cp => {
-        const match = cp.partyId?._id === vend._id || cp.partyId === vend._id || cp.vendor === vend._id || cp.vendor === vend.name;
-        if (match && cp.status !== "Cancelled") {
-          const cpDate = new Date(cp.date || cp.createdAt);
-          if (cpDate.getTime() < start.getTime()) {
-            beforePayments += cp.amount || 0;
-          } else if (cpDate.getTime() <= end.getTime()) {
-            periodPayments += cp.amount || 0;
-          }
+        if (isReturn) opening -= total;
+      } else if (invDate.getTime() <= end.getTime()) {
+        if (isPurchase) {
+          purchases += total;
+          payments += inInvoicePaid;
         }
-      });
+        if (isReturn) payments += total;
+      }
+    });
 
-      // Bank Payments
-      bankPayments.forEach(bp => {
-        const match = bp.vendor === vend._id || bp.vendor === vend.name;
-        if (match && bp.status !== "Cancelled") {
-          const bpDate = new Date(bp.date || bp.createdAt);
-          if (bpDate.getTime() < start.getTime()) {
-            beforePayments += bp.amount || 0;
-          } else if (bpDate.getTime() <= end.getTime()) {
-            periodPayments += bp.amount || 0;
-          }
-        }
-      });
+    cashPayments.forEach(cp => {
+      if (cp.status !== "Cancelled") {
+        const cpDate = new Date(cp.date || cp.createdAt);
+        const amt = Number(cp.amount) || 0;
+        if (cpDate.getTime() < start.getTime()) opening -= amt;
+        else if (cpDate.getTime() <= end.getTime()) payments += amt;
+      }
+    });
 
-      opening += (initialOpening + beforePurchases - beforePayments);
-      purchases += periodPurchases;
-      payments += periodPayments;
+    bankPayments.forEach(bp => {
+      if (bp.status !== "Cancelled") {
+        const bpDate = new Date(bp.date || bp.createdAt);
+        const amt = Number(bp.amount) || 0;
+        if (bpDate.getTime() < start.getTime()) opening -= amt;
+        else if (bpDate.getTime() <= end.getTime()) payments += amt;
+      }
     });
 
     return { opening, purchases, payments, current: opening + purchases - payments };
@@ -158,9 +153,19 @@ export default function PayablesPage() {
 
   // Top summary widgets
   const summaries = useMemo(() => {
-    const daily = getPeriodPayables(new Date(todayDate.setHours(0,0,0,0)), new Date(todayDate.setHours(23,59,59,999)));
-    const monthly = getPeriodPayables(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1), new Date(todayDate.getFullYear(), todayDate.getMonth()+1, 0, 23,59,59));
-    const yearly = getPeriodPayables(new Date(todayDate.getFullYear(), 0, 1), new Date(todayDate.getFullYear(), 11, 31, 23,59,59));
+    const now = new Date();
+    const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const mStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const mEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const yStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const yEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+
+    const daily = getPeriodPayables(dStart, dEnd);
+    const monthly = getPeriodPayables(mStart, mEnd);
+    const yearly = getPeriodPayables(yStart, yEnd);
     const overall = getPeriodPayables(new Date(0), new Date("2100-01-01"));
     return { daily, monthly, yearly, overall };
   }, [vendors, invoices, cashPayments, bankPayments]);
@@ -169,7 +174,26 @@ export default function PayablesPage() {
   const rows = useMemo(() => {
     const now = new Date();
     
-    return vendors.map(vend => {
+    const vendorList = [...vendors];
+    const knownVendIds = new Set(vendors.map((v: any) => String(v._id || v.id)));
+    invoices.forEach((inv: any) => {
+      const pId = inv.partyId?._id || inv.partyId;
+      const pName = inv.partyId?.companyName || inv.partyId?.name || inv.partyName || inv.vendorName || "General Vendor";
+      const key = pId ? String(pId) : `synthetic_${pName}`;
+      if (!knownVendIds.has(key)) {
+        knownVendIds.add(key);
+        vendorList.push({
+          _id: key,
+          id: key,
+          name: pName,
+          companyName: pName,
+          openingBalance: 0,
+          type: "Vendor"
+        });
+      }
+    });
+
+    return vendorList.map(vend => {
       const initialOpening = Number(vend.openingBalance) || 0;
       let beforePurchases = 0;
       let beforePayments = 0;

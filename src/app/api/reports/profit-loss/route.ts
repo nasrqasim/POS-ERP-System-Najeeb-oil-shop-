@@ -1,9 +1,5 @@
 import { ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Account from "@/models/Account";
-import JournalEntry from "@/models/JournalEntry";
-import Invoice from "@/models/Invoice";
-import Item from "@/models/Item";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 function getLineQty(line: any): number {
   const cartons = Number(line.cartons) || 0;
@@ -23,70 +19,54 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("fromDate");
     const toDate = searchParams.get("toDate");
 
-    await dbConnect();
+    const fromTime = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : 0;
+    const toTime = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : Infinity;
 
-    const match: any = {};
-    const invoiceMatch: any = { status: { $nin: ["cancelled", "Cancelled"] } };
-
-    if (fromDate || toDate) {
-      match.date = {};
-      invoiceMatch.date = {};
-      if (fromDate) {
-        const fromD = new Date(fromDate);
-        fromD.setHours(0, 0, 0, 0);
-        match.date.$gte = fromD;
-        invoiceMatch.date.$gte = fromD;
-      }
-      if (toDate) {
-        const toD = new Date(toDate);
-        toD.setHours(23, 59, 59, 999);
-        match.date.$lte = toD;
-        invoiceMatch.date.$lte = toD;
-      }
-    }
-
-    const journalBalances = await JournalEntry.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: "$accountCode",
-          debit: { $sum: "$debit" },
-          credit: { $sum: "$credit" },
-        },
-      },
-    ]);
-
-    const balanceMap = new Map();
-    journalBalances.forEach((jb) => {
-      balanceMap.set(jb._id, jb);
+    const allEntries = await getDocuments("journal_entries");
+    const filteredEntries = allEntries.filter((j: any) => {
+      const t = new Date(j.date || 0).getTime();
+      return t >= fromTime && t <= toTime;
     });
 
-    const accounts = await Account.find().lean();
-    const accountMap = new Map();
-    accounts.forEach(a => accountMap.set(a.code, a));
+    const balanceMap = new Map<string, { debit: number; credit: number }>();
+    for (const j of filteredEntries) {
+      const code = j.accountCode;
+      if (!code) continue;
+      let curr = balanceMap.get(code);
+      if (!curr) {
+        curr = { debit: 0, credit: 0 };
+        balanceMap.set(code, curr);
+      }
+      curr.debit += Number(j.debit || 0);
+      curr.credit += Number(j.credit || 0);
+    }
 
-    // Calculate COGS dynamically for the period
-    const items = await Item.find().lean();
-    const invoices = await Invoice.find(invoiceMatch).lean();
+    const accounts = await getDocuments("accounts");
+    const accountMap = new Map(accounts.map((a: any) => [a.code, a]));
 
-    const OUT_TYPES = new Set([
-      "sale", "non_tax_sale", "pos", "pos_counter_sale", "reduce_stock", "challan"
-    ]);
-    const OUT_RETURN_TYPES = new Set([
-      "purchase_return", "non_tax_purchase_return"
-    ]);
+    const allInvoices = await getDocuments("invoices");
+    const periodInvoices = allInvoices.filter((inv: any) => {
+      if (inv.status === "cancelled" || inv.status === "Cancelled") return false;
+      const t = new Date(inv.date || 0).getTime();
+      return t >= fromTime && t <= toTime;
+    });
+
+    const items = await getDocuments("items");
+
+    const OUT_TYPES = new Set(["sale", "non_tax_sale", "pos", "pos_counter_sale", "reduce_stock", "challan"]);
+    const OUT_RETURN_TYPES = new Set(["purchase_return", "non_tax_purchase_return"]);
 
     let totalCogs = 0;
-    items.forEach(item => {
+    items.forEach((item: any) => {
       let qtyOut = 0;
-      invoices.forEach(inv => {
+      periodInvoices.forEach((inv: any) => {
         const invType = String(inv.type || "");
         const isOut = OUT_TYPES.has(invType);
         const isOutReturn = OUT_RETURN_TYPES.has(invType);
         if (!isOut && !isOutReturn) return;
 
         (inv.lines || []).forEach((line: any) => {
-          const lineItemId = line.itemId?._id || line.itemId;
+          const lineItemId = typeof line.itemId === "object" ? line.itemId?._id : line.itemId;
           if (String(lineItemId) !== String(item._id)) return;
 
           const qty = getLineQty(line);
@@ -96,15 +76,14 @@ export async function GET(req: Request) {
           }
         });
       });
-      totalCogs += qtyOut * (item.purchaseRate || 0);
+      totalCogs += qtyOut * Number(item.purchaseRate || 0);
     });
 
-    // 1. Calculate Revenue from Invoices & Income Accounts
     const SALE_TYPES = new Set(["sale", "non_tax_sale", "pos", "pos_counter_sale"]);
     const SALE_RETURN_TYPES = new Set(["sale_return", "non_tax_sale_return"]);
 
     let salesInvoiceRevenue = 0;
-    invoices.forEach(inv => {
+    periodInvoices.forEach((inv: any) => {
       const invType = String(inv.type || "");
       const amt = Number(inv.totalAmount || inv.total || inv.netAmount || 0);
       if (SALE_TYPES.has(invType)) salesInvoiceRevenue += amt;
@@ -124,26 +103,25 @@ export async function GET(req: Request) {
       report.totalRevenue += salesInvoiceRevenue;
     }
 
-    // Grab income / expense balances from Journal Entry
-    const journalTitles = await JournalEntry.aggregate([
-      { $match: match },
-      { $group: { _id: "$accountCode", title: { $first: "$accountTitle" } } }
-    ]);
-    const titleMap = new Map(journalTitles.map((t: any) => [t._id, t.title]));
+    const titleMap = new Map();
+    filteredEntries.forEach((j: any) => {
+      if (j.accountCode && !titleMap.has(j.accountCode)) {
+        titleMap.set(j.accountCode, j.accountTitle);
+      }
+    });
 
     balanceMap.forEach((journal, code) => {
-      // Skip Purchases (5100) and Sales (4100) since we compute sales & COGS dynamically from invoices
       if (code === "5100" || code === "4100") return;
 
       const acc = accountMap.get(code);
-      let type = acc ? acc.type.toLowerCase() : "";
-      
+      let type = acc ? String(acc.type || "").toLowerCase() : "";
+
       if (!type) {
-         if (code.startsWith("4")) type = "income";
-         else if (code.startsWith("5")) type = "expense";
-         else return;
+        if (code.startsWith("4")) type = "income";
+        else if (code.startsWith("5")) type = "expense";
+        else return;
       } else if (type === "revenue") {
-         type = "income";
+        type = "income";
       }
 
       const title = acc ? acc.title : (titleMap.get(code) || `Account ${code}`);
@@ -151,19 +129,18 @@ export async function GET(req: Request) {
       if (type === "income" || type === "revenue") {
         const balance = (journal.credit - journal.debit);
         if (balance !== 0) {
-            report.revenue.push({ title, amount: balance });
-            report.totalRevenue += balance;
+          report.revenue.push({ title, amount: balance });
+          report.totalRevenue += balance;
         }
       } else if (type === "expense") {
         const balance = (journal.debit - journal.credit);
         if (balance !== 0) {
-            report.expenses.push({ title, amount: balance });
-            report.totalExpenses += balance;
+          report.expenses.push({ title, amount: balance });
+          report.totalExpenses += balance;
         }
       }
     });
 
-    // Add COGS to expenses if non-zero
     if (totalCogs > 0) {
       report.expenses.push({ title: "Cost of Goods Sold (COGS)", amount: totalCogs });
       report.totalExpenses += totalCogs;

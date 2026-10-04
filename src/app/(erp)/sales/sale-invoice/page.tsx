@@ -21,6 +21,34 @@ interface SaleInvoice {
 
 
 
+
+function safeToDateStr(d: any): string {
+  if (!d) return "";
+  if (typeof d === "string") {
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.split('T')[0];
+  }
+  try {
+    const dateObj = typeof d === "object" && (d.seconds || d._seconds)
+      ? new Date((d.seconds || d._seconds) * 1000)
+      : new Date(d);
+    return isNaN(dateObj.getTime()) ? "" : dateObj.toISOString().split('T')[0];
+  } catch {
+    return "";
+  }
+}
+
+function safeFormatDate(d: any): string {
+  if (!d) return "-";
+  try {
+    const dateObj = typeof d === "object" && (d.seconds || d._seconds)
+      ? new Date((d.seconds || d._seconds) * 1000)
+      : new Date(d);
+    return isNaN(dateObj.getTime()) ? "-" : dateObj.toLocaleDateString();
+  } catch {
+    return "-";
+  }
+}
+
 export default function SaleInvoicePage() {
   const [showForm, setShowForm] = useState(false);
   const [viewOrder, setViewOrder] = useState<any | null>(null);
@@ -99,17 +127,26 @@ export default function SaleInvoicePage() {
     );
   }
 
-  const filteredInvoices = invoices.filter(inv => {
+  const filteredInvoices = (Array.isArray(invoices) ? invoices : []).filter(inv => {
+    if (!inv) return false;
+    const custName = (
+      (typeof inv.partyId === "object" ? (inv.partyId?.companyName || inv.partyId?.name) : "") ||
+      inv.partyName ||
+      inv.customerName ||
+      inv.customer ||
+      ""
+    ).toLowerCase();
+
+    const q = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery || 
-      inv.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.partyId?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.partyId?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.reference?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.regNo?.toLowerCase().includes(searchQuery.toLowerCase());
+      String(inv.invoiceNo || "").toLowerCase().includes(q) ||
+      custName.includes(q) ||
+      String(inv.reference || "").toLowerCase().includes(q) ||
+      String(inv.regNo || "").toLowerCase().includes(q);
     
-    const matchesStatus = !statusFilter || inv.status?.toLowerCase() === statusFilter.toLowerCase();
+    const matchesStatus = !statusFilter || String(inv.status || "").toLowerCase() === statusFilter.toLowerCase();
     
-    const invDateStr = inv.date ? new Date(inv.date).toISOString().split('T')[0] : "";
+    const invDateStr = safeToDateStr(inv.date);
     const matchesDate = !filterDate || invDateStr === filterDate;
     
     return matchesSearch && matchesStatus && matchesDate;
@@ -241,10 +278,16 @@ export default function SaleInvoicePage() {
                       {inv.reference && <span className="block text-[9px] text-maroon-600 mt-1">Ref: {inv.reference}</span>}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-bold text-slate-600">{inv.date ? new Date(inv.date).toLocaleDateString() : "-"}</span>
+                      <span className="font-bold text-slate-600">{safeFormatDate(inv.date)}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-bold text-slate-700">{inv.partyId?.companyName || inv.partyId?.name || "N/A"}</span>
+                      <span className="font-bold text-slate-700">{
+    (typeof inv.partyId === "object" ? (inv.partyId?.companyName || inv.partyId?.name) : "") ||
+    inv.partyName ||
+    inv.customerName ||
+    inv.customer ||
+    (inv.partyId ? String(inv.partyId) : "Walk-in Customer")
+  }</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-bold text-blue-600">{inv.regNo || "-"}</span>

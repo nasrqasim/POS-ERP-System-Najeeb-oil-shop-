@@ -6,62 +6,10 @@ import Link from "next/link";
 
 export default function DecisionSupport() {
   const [activeTab, setActiveTab] = useState("Insights");
-  const insights = [
-    {
-      id: 1,
-      title: "Review Pricing Strategy",
-      type: "opportunity",
-      priority: "medium",
-      description: "Analyze product margins and consider adjusting prices for low-margin items.",
-      goal: "Improve profitability",
-      date: "28 Apr 2026"
-    },
-    {
-      id: 2,
-      title: "Stock Reordering Recommended",
-      type: "action required",
-      priority: "high",
-      description: "Based on recent sales velocity, we recommend reordering Engine Oil 5W-40 earlier than scheduled.",
-      goal: "Prevent stockouts",
-      date: "02 May 2026"
-    }
-  ];
-
-  const actions = [
-    {
-      id: 1,
-      title: "Reconcile Bank Statement",
-      type: "task",
-      priority: "high",
-      description: "Pending reconciliation for the Main Corporate Account for April 2026.",
-      goal: "Financial compliance",
-      date: "Due Today"
-    }
-  ];
-
-  const approvals = [
-    {
-      id: 1,
-      title: "Purchase Order PO-2026-00002",
-      type: "pending approval",
-      priority: "medium",
-      description: "Awaiting your approval for Rs. 450,000 to Alpha Supplies Ltd.",
-      goal: "Procurement",
-      date: "Submitted 2 days ago"
-    }
-  ];
-
-  const alerts = [
-    {
-      id: 1,
-      title: "Unusual Expense Spike",
-      type: "anomaly detected",
-      priority: "high",
-      description: "Transportation expenses have increased by 45% compared to the previous month.",
-      goal: "Cost control",
-      date: "Detected Today"
-    }
-  ];
+  const insights: any[] = [];
+  const actions: any[] = [];
+  const approvals: any[] = [];
+  const alerts: any[] = [];
 
   const tabs = [
     { label: "Insights", count: insights.length },

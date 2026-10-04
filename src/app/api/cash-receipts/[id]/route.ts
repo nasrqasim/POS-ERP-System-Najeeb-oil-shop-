@@ -1,21 +1,18 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import CashReceipt from "@/models/CashReceipt";
-import JournalEntry from "@/models/JournalEntry";
-import { recalculatePartyBalance, postCashReceiptJournalEntries } from "@/services/posting/invoicePostingHelper";
+import { getDocumentById, updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
+import { recalculatePartyBalance, postCashReceiptJournalEntries, deleteJournalEntriesByVoucherNo } from "@/services/posting/invoicePostingHelper";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    await dbConnect();
-    const oldDoc = await CashReceipt.findById(params.id).lean() as any;
-    const row = await CashReceipt.findByIdAndUpdate(params.id, body, { new: true });
+    const oldDoc = await getDocumentById("cash_receipts", params.id);
+    const row = await updateDocument("cash_receipts", params.id, body);
     if (!row) return fail("Not found", 404);
 
     if (row.status === "Posted") {
       await postCashReceiptJournalEntries(row);
     } else {
-      await JournalEntry.deleteMany({ voucherNo: row.receiptNumber });
+      await deleteJournalEntriesByVoucherNo(row.receiptNumber);
     }
 
     const oldPartyId = oldDoc?.partyId || oldDoc?.party;
@@ -32,11 +29,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    const oldDoc = await CashReceipt.findById(params.id).lean() as any;
+    const oldDoc = await getDocumentById("cash_receipts", params.id);
     if (oldDoc) {
-      await JournalEntry.deleteMany({ voucherNo: oldDoc.receiptNumber });
-      await CashReceipt.findByIdAndDelete(params.id);
+      await deleteJournalEntriesByVoucherNo(oldDoc.receiptNumber);
+      await deleteDocument("cash_receipts", params.id);
       const partyId = oldDoc.partyId || oldDoc.party;
       if (partyId) await recalculatePartyBalance(String(partyId));
     }

@@ -1,22 +1,21 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Category from "@/models/Category";
+import { getAllCategories, createCategory } from "@/lib/firestore/itemsRepository";
 
 export async function GET() {
-  await dbConnect();
-  const rows = await Category.find().sort({ createdAt: -1 }).lean();
-  return ok(rows);
+  try {
+    const rows = await getAllCategories();
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    console.log("Creating category with body:", body);
-    await dbConnect();
-    const row = await Category.create(body);
+    const row = await createCategory(body);
     return ok(row, 201);
   } catch (e) {
-    console.error("API Error [categories POST]:", e);
     return fail((e as Error).message);
   }
 }

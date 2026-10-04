@@ -1,47 +1,31 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import Invoice from "@/models/Invoice";
-import CashReceipt from "@/models/CashReceipt";
-import BankReceipt from "@/models/BankReceipt";
-import JournalEntry from "@/models/JournalEntry";
+import { getDocuments, getDocumentById, updateDocument, createDocument } from "@/lib/firestore/genericRepository";
 import { recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    const invoice = await Invoice.findById(params.id);
+    const invoice = await getDocumentById("invoices", params.id);
     if (!invoice) {
       return fail("Invoice not found.", 404);
     }
 
-    const invoiceNo = invoice.invoiceNo;
-    const partyId = invoice.partyId ? invoice.partyId.toString() : "";
+    const invoiceNo = String(invoice.invoiceNo || "");
+    const partyId = invoice.partyId ? String(invoice.partyId) : "";
 
-    // 1. Fetch Cash Receipts linked to this invoice
-    const cashReceipts = await CashReceipt.find({
-      partyId: invoice.partyId,
-      $or: [
-        { reference: invoiceNo },
-        { narration: { $regex: invoiceNo, $options: "i" } }
-      ],
-      status: { $ne: "Cancelled" }
-    }).lean();
+    const allCashReceipts = await getDocuments("cash_receipts");
+    const cashReceipts = allCashReceipts.filter((r: any) => 
+      String(r.partyId) === partyId &&
+      r.status !== "Cancelled" &&
+      (r.reference === invoiceNo || (r.narration && String(r.narration).toLowerCase().includes(invoiceNo.toLowerCase())))
+    );
 
-    // 2. Fetch Bank Receipts linked to this invoice
-    const bankReceipts = await BankReceipt.find({
-      $and: [
-        { $or: [{ party: partyId }, { party: String(partyId) }] },
-        {
-          $or: [
-            { instrumentNo: invoiceNo },
-            { instrumentNo: { $regex: invoiceNo, $options: "i" } }
-          ]
-        }
-      ],
-      status: { $ne: "Cancelled" }
-    }).lean();
+    const allBankReceipts = await getDocuments("bank_receipts");
+    const bankReceipts = allBankReceipts.filter((r: any) =>
+      (String(r.party) === partyId || String(r.partyId) === partyId) &&
+      r.status !== "Cancelled" &&
+      (r.instrumentNo === invoiceNo || (r.instrumentNo && String(r.instrumentNo).toLowerCase().includes(invoiceNo.toLowerCase())))
+    );
 
-    // 3. Map and merge into payment history format
     const history = [
       ...cashReceipts.map((r: any) => ({
         date: r.date,
@@ -75,10 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return fail("Payment amount must be greater than zero.", 400);
     }
 
-    await dbConnect();
-
-    // 1. Fetch the invoice
-    const invoice = await Invoice.findById(params.id);
+    const invoice = await getDocumentById("invoices", params.id);
     if (!invoice) {
       return fail("Invoice not found.", 404);
     }
@@ -91,25 +72,26 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return fail(`Payment amount (${paymentAmount}) exceeds outstanding balance (${remaining}).`, 400);
     }
 
-    // 2. Update Invoice
-    invoice.amountReceived = prevReceived + paymentAmount;
-    const newRemaining = netTotal - invoice.amountReceived;
-    if (newRemaining <= 0) {
-      invoice.status = "paid";
-    }
+    const newAmountReceived = prevReceived + paymentAmount;
+    const newRemaining = netTotal - newAmountReceived;
+    const newStatus = newRemaining <= 0 ? "paid" : invoice.status;
 
-    await invoice.save();
+    await updateDocument("invoices", params.id, {
+      amountReceived: newAmountReceived,
+      status: newStatus
+    });
 
-    // 3. Auto-generate receipt number
-    let attempt = (await CashReceipt.countDocuments()) + (await BankReceipt.countDocuments()) + 1;
+    const cashReceipts = await getDocuments("cash_receipts");
+    const bankReceipts = await getDocuments("bank_receipts");
+    let attempt = cashReceipts.length + bankReceipts.length + 1;
     const prefix = paymentMethod === "Bank" ? "BRV" : "CRV";
     let receiptNumber = `${prefix}-${attempt.toString().padStart(5, "0")}`;
     
     let isUnique = false;
     while (!isUnique) {
-      const existingCash = await CashReceipt.findOne({ receiptNumber });
-      const existingBank = await BankReceipt.findOne({ receiptNumber });
-      if (!existingCash && !existingBank) {
+      const matchCash = cashReceipts.find((r: any) => r.receiptNumber === receiptNumber);
+      const matchBank = bankReceipts.find((r: any) => r.receiptNumber === receiptNumber);
+      if (!matchCash && !matchBank) {
         isUnique = true;
       } else {
         attempt++;
@@ -120,45 +102,43 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const narration = remarks || `Payment received against ${invoice.invoiceNo}`;
     const paymentDate = date || new Date().toISOString().split("T")[0];
 
-    // 4. Create Receipt & Journal Entries
     if (paymentMethod === "Bank") {
-      await BankReceipt.create({
+      await createDocument("bank_receipts", {
         receiptNumber,
         date: paymentDate,
         type: "Customer",
-        party: invoice.partyId ? invoice.partyId.toString() : "",
+        party: invoice.partyId ? String(invoice.partyId) : "",
+        partyId: invoice.partyId ? String(invoice.partyId) : "",
         bankAccount: bankId || "",
         amount: paymentAmount,
         netAmount: paymentAmount,
         status: "Posted",
       });
 
-      await JournalEntry.create([
-        {
-          invoiceId: invoice._id,
-          voucherNo: receiptNumber,
-          date: new Date(paymentDate),
-          accountCode: "1110", // Bank
-          accountTitle: "Bank",
-          debit: paymentAmount,
-          credit: 0,
-          remarks: narration,
-        },
-        {
-          invoiceId: invoice._id,
-          voucherNo: receiptNumber,
-          date: new Date(paymentDate),
-          accountCode: "1100", // Accounts Receivable
-          accountTitle: "Accounts Receivable",
-          debit: 0,
-          credit: paymentAmount,
-          remarks: narration,
-          partyId: invoice.partyId,
-        }
-      ]);
+      await createDocument("journal_entries", {
+        invoiceId: invoice._id,
+        voucherNo: receiptNumber,
+        date: new Date(paymentDate).toISOString(),
+        accountCode: "1110",
+        accountTitle: "Bank",
+        debit: paymentAmount,
+        credit: 0,
+        remarks: narration,
+      });
+
+      await createDocument("journal_entries", {
+        invoiceId: invoice._id,
+        voucherNo: receiptNumber,
+        date: new Date(paymentDate).toISOString(),
+        accountCode: "1100",
+        accountTitle: "Accounts Receivable",
+        debit: 0,
+        credit: paymentAmount,
+        remarks: narration,
+        partyId: invoice.partyId || null,
+      });
     } else {
-      // Cash Receipt
-      await CashReceipt.create({
+      await createDocument("cash_receipts", {
         receiptNumber,
         receiptType: "party",
         date: paymentDate,
@@ -169,41 +149,39 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         status: "Posted",
       });
 
-      await JournalEntry.create([
-        {
-          invoiceId: invoice._id,
-          voucherNo: receiptNumber,
-          date: new Date(paymentDate),
-          accountCode: "1111", // Cash
-          accountTitle: "Cash",
-          debit: paymentAmount,
-          credit: 0,
-          remarks: narration,
-        },
-        {
-          invoiceId: invoice._id,
-          voucherNo: receiptNumber,
-          date: new Date(paymentDate),
-          accountCode: "1100", // Accounts Receivable
-          accountTitle: "Accounts Receivable",
-          debit: 0,
-          credit: paymentAmount,
-          remarks: narration,
-          partyId: invoice.partyId,
-        }
-      ]);
+      await createDocument("journal_entries", {
+        invoiceId: invoice._id,
+        voucherNo: receiptNumber,
+        date: new Date(paymentDate).toISOString(),
+        accountCode: "1111",
+        accountTitle: "Cash",
+        debit: paymentAmount,
+        credit: 0,
+        remarks: narration,
+      });
+
+      await createDocument("journal_entries", {
+        invoiceId: invoice._id,
+        voucherNo: receiptNumber,
+        date: new Date(paymentDate).toISOString(),
+        accountCode: "1100",
+        accountTitle: "Accounts Receivable",
+        debit: 0,
+        credit: paymentAmount,
+        remarks: narration,
+        partyId: invoice.partyId || null,
+      });
     }
 
-    // 5. Recalculate customer balance
     if (invoice.partyId) {
-      await recalculatePartyBalance(invoice.partyId.toString());
+      await recalculatePartyBalance(String(invoice.partyId));
     }
 
     return ok({
       success: true,
-      amountReceived: invoice.amountReceived,
+      amountReceived: newAmountReceived,
       outstanding: newRemaining,
-      status: invoice.status
+      status: newStatus
     });
   } catch (e) {
     return fail((e as Error).message, 500);

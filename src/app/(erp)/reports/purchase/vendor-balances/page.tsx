@@ -5,6 +5,7 @@ import ERPReportLayout from "@/components/erp/reports/ERPReportLayout";
 import { Download, Printer, Play, Users, DollarSign, ArrowDownLeft, ArrowUpRight, Search, FileSpreadsheet } from "lucide-react";
 import { exportToExcel, printPage } from "@/lib/excel";
 import VendorProfileHistory from "@/components/erp/maintain/VendorProfileHistory";
+import { calculateVendorBalance } from "@/lib/centralizedBalanceService";
 
 function formatBalance(val: number) {
   if (val < 0) return { text: `-Rs. ${Math.abs(val).toLocaleString()}`, label: "(Debit)", color: "text-rose-600" };

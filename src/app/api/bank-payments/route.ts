@@ -1,63 +1,47 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import BankPayment from "@/models/BankPayment";
+import { getDocuments, createDocument, getDocumentById } from "@/lib/firestore/genericRepository";
 import { postBankPayment } from "@/services/posting/transactionPosting";
 import { recalculatePartyBalance } from "@/services/posting/invoicePostingHelper";
 
 export async function GET() {
-  await dbConnect();
-  // Using aggregate to join with Party and Bank for names
-  const rows = await BankPayment.aggregate([
-    {
-      $lookup: {
-        from: "parties",
-        let: { vendorId: "$vendor" },
-        pipeline: [
-          { $match: { $expr: { $eq: [{ $toString: "$_id" }, "$$vendorId"] } } }
-        ],
-        as: "vendorData"
-      }
-    },
-    {
-      $lookup: {
-        from: "banks",
-        let: { bankId: "$bankAccount" },
-        pipeline: [
-          { $match: { $expr: { $eq: [{ $toString: "$_id" }, "$$bankId"] } } }
-        ],
-        as: "bankData"
-      }
-    },
-    {
-      $project: {
-        voucherNo: 1,
-        date: 1,
-        mode: 1,
-        amount: 1,
-        status: 1,
-        vendor: { $ifNull: [{ $arrayElemAt: ["$vendorData.name", 0] }, "$vendor"] },
-        bankAccount: { $ifNull: [{ $arrayElemAt: ["$bankData.name", 0] }, "$bankAccount"] },
-        createdAt: 1
-      }
-    },
-    { $sort: { createdAt: -1 } }
-  ]);
-  
-  return ok(rows);
+  try {
+    const bankPayments = await getDocuments("bank_payments");
+    const parties = await getDocuments("parties");
+    const banks = await getDocuments("banks");
+
+    const partyMap = new Map(parties.map((p: any) => [String(p._id), p.name || p.companyName]));
+    const bankMap = new Map(banks.map((b: any) => [String(b._id), b.name || b.bankName || b.title]));
+
+    const rows = bankPayments.map((bp: any) => {
+      const vendorId = String(bp.vendor || bp.partyId || "");
+      const bankId = String(bp.bankAccount || bp.bankAccountId || "");
+      return {
+        ...bp,
+        vendor: partyMap.get(vendorId) || bp.vendor || vendorId,
+        bankAccount: bankMap.get(bankId) || bp.bankAccount || bankId,
+      };
+    });
+
+    rows.sort((a: any, b: any) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    return ok(rows);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await dbConnect();
     
     if (!body.voucherNo || body.voucherNo === "Auto-generated") {
+      const existing = await getDocuments("bank_payments");
+      let attempt = existing.length + 1;
       let isUnique = false;
-      let attempt = await BankPayment.countDocuments() + 1;
       while (!isUnique) {
         const candidate = `BPV-${attempt.toString().padStart(5, "0")}`;
-        const existing = await BankPayment.findOne({ voucherNo: candidate });
-        if (!existing) {
+        const match = existing.find((e: any) => e.voucherNo === candidate);
+        if (!match) {
           body.voucherNo = candidate;
           isUnique = true;
         } else {
@@ -69,23 +53,23 @@ export async function POST(req: Request) {
     const row = await postBankPayment({
       voucherNo: body.voucherNo,
       date: body.date,
-      partyId: body.vendorId,
-      bankId: body.bankAccountId, // Assuming this is bankAccountId from form
-      amount: body.totalAmount,
-      wht: body.whtAmount,
-      netAmount: body.totalAmount - (body.whtAmount || 0),
+      partyId: body.vendorId || body.partyId,
+      bankId: body.bankAccountId || body.bankAccount,
+      amount: Number(body.totalAmount || body.amount || 0),
+      wht: Number(body.whtAmount || body.wht || 0),
+      netAmount: Number(body.totalAmount || body.amount || 0) - Number(body.whtAmount || body.wht || 0),
       narration: body.narration,
       partyPaymentType: body.partyPaymentType,
       isRefund: body.isRefund,
     });
 
-    if (body.vendorId) await recalculatePartyBalance(String(body.vendorId));
+    const vendorId = body.vendorId || body.partyId;
+    if (vendorId) await recalculatePartyBalance(String(vendorId));
 
     return ok(row, 201);
   } catch (e) {
     return fail((e as Error).message);
   }
 }
-
 
 export const dynamic = "force-dynamic";

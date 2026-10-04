@@ -1,21 +1,18 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import BankReceipt from "@/models/BankReceipt";
-import JournalEntry from "@/models/JournalEntry";
-import { recalculatePartyBalance, postBankReceiptJournalEntries } from "@/services/posting/invoicePostingHelper";
+import { getDocumentById, updateDocument, deleteDocument } from "@/lib/firestore/genericRepository";
+import { recalculatePartyBalance, postBankReceiptJournalEntries, deleteJournalEntriesByVoucherNo } from "@/services/posting/invoicePostingHelper";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
-    await dbConnect();
-    const oldDoc = await BankReceipt.findById(params.id).lean() as any;
-    const row = await BankReceipt.findByIdAndUpdate(params.id, body, { new: true });
+    const oldDoc = await getDocumentById("bank_receipts", params.id);
+    const row = await updateDocument("bank_receipts", params.id, body);
     if (!row) return fail("Not found", 404);
 
     if (row.status === "Posted" || row.status === "posted") {
       await postBankReceiptJournalEntries(row);
     } else {
-      await JournalEntry.deleteMany({ voucherNo: row.receiptNumber || row.voucherNo });
+      await deleteJournalEntriesByVoucherNo(row.receiptNumber || row.voucherNo);
     }
 
     const oldPartyId = oldDoc?.party || oldDoc?.partyId;
@@ -32,11 +29,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   try {
-    await dbConnect();
-    const oldDoc = await BankReceipt.findById(params.id).lean() as any;
+    const oldDoc = await getDocumentById("bank_receipts", params.id);
     if (oldDoc) {
-      await JournalEntry.deleteMany({ voucherNo: oldDoc.receiptNumber || oldDoc.voucherNo });
-      await BankReceipt.findByIdAndDelete(params.id);
+      await deleteJournalEntriesByVoucherNo(oldDoc.receiptNumber || oldDoc.voucherNo);
+      await deleteDocument("bank_receipts", params.id);
       const partyId = oldDoc.party || oldDoc.partyId;
       if (partyId) await recalculatePartyBalance(String(partyId));
     }

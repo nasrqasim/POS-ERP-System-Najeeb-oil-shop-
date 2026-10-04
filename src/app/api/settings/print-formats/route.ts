@@ -1,24 +1,21 @@
 import { fail, ok } from "@/lib/api";
-import dbConnect from "@/lib/db";
-import { PrintFormat } from "@/models/PrintFormat";
+import { getDocuments, createDocument, updateDocument } from "@/lib/firestore/genericRepository";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const formatName = searchParams.get("formatName");
 
-    await dbConnect();
+    const allFormats = await getDocuments("print_formats");
     
     if (formatName) {
-      let format = await PrintFormat.findOne({ formatName });
+      let format = allFormats.find((f: any) => f.formatName === formatName);
       if (!format) {
-        // Create default if not found
-        format = await PrintFormat.create({ formatName });
+        format = await createDocument("print_formats", { formatName });
       }
       return ok(format);
     }
 
-    const allFormats = await PrintFormat.find({});
     return ok(allFormats);
   } catch (e) {
     return fail((e as Error).message);
@@ -32,13 +29,15 @@ export async function POST(req: Request) {
 
     if (!formatName) return fail("Format name is required");
 
-    await dbConnect();
-    
-    const updatedFormat = await PrintFormat.findOneAndUpdate(
-      { formatName },
-      { ...config },
-      { upsert: true, new: true }
-    );
+    const allFormats = await getDocuments("print_formats");
+    const existing = allFormats.find((f: any) => f.formatName === formatName);
+
+    let updatedFormat;
+    if (existing) {
+      updatedFormat = await updateDocument("print_formats", existing._id, { ...config });
+    } else {
+      updatedFormat = await createDocument("print_formats", { formatName, ...config });
+    }
 
     return ok(updatedFormat);
   } catch (e) {
