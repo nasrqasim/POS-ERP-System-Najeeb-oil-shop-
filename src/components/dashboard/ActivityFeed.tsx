@@ -90,32 +90,42 @@ export default function ActivityFeed() {
       </div>
 
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-        {activeTab === "Transactions" && transactions.map((item) => (
-          <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer bg-white dark:bg-slate-900 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-full ${item.iconBg} dark:bg-slate-800 dark:text-slate-200`}>
-                <item.Icon size={16} />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{item.id}</p>
-                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${item.color} dark:bg-slate-800 dark:text-slate-400 dark:text-slate-500`}>
-                        {item.status}
-                    </span>
+        {activeTab === "Transactions" && (
+          transactions.length > 0 ? (
+            transactions.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer bg-white dark:bg-slate-900 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-full ${item.iconBg} dark:bg-slate-800 dark:text-slate-200`}>
+                    <item.Icon size={16} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-maroon-800 dark:group-hover:text-maroon-400 transition-colors">{item.id}</p>
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${item.color} dark:bg-slate-800 dark:text-slate-400 dark:text-slate-500`}>
+                            {item.status}
+                        </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium">{item.user}</p>
+                    <div className="flex items-center gap-2 text-[10px] font-medium">
+                        <span className={item.typeColor}>{item.type}</span>
+                        <span className="text-slate-300 dark:text-slate-700 dark:text-slate-200">•</span>
+                        <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 flex items-center gap-1"><Clock size={10}/> {item.time}</span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium">{item.user}</p>
-                <div className="flex items-center gap-2 text-[10px] font-medium">
-                    <span className={item.typeColor}>{item.type}</span>
-                    <span className="text-slate-300 dark:text-slate-700 dark:text-slate-200">•</span>
-                    <span className="text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500 flex items-center gap-1"><Clock size={10}/> {item.time}</span>
+                <div className="text-right">
+                  <p className={`text-sm font-black ${item.amountColor}`}>{item.amount}</p>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+              <Activity size={24} className="mx-auto mb-2 opacity-40" />
+              <p className="text-xs font-bold">No recent transactions</p>
+              <p className="text-[10px] text-slate-400">Transactions will appear here as vouchers are created</p>
             </div>
-            <div className="text-right">
-              <p className={`text-sm font-black ${item.amountColor}`}>{item.amount}</p>
-            </div>
-          </div>
-        ))}
+          )
+        )}
 
         {activeTab === "Activities" && activities.map((item, idx) => (
           <div key={idx} className="flex items-start gap-4 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 dark:bg-slate-800/50 dark:hover:bg-slate-800/50 transition-colors bg-white dark:bg-slate-900 shadow-sm">

@@ -1,4 +1,4 @@
-﻿import { ok } from "@/lib/api";
+import { ok } from "@/lib/api";
 import { getAllParties } from "@/lib/firestore/partiesRepository";
 import { getAllInvoices } from "@/lib/firestore/invoicesRepository";
 import { getAllItems } from "@/lib/firestore/itemsRepository";
@@ -8,6 +8,7 @@ import {
   getAllBankReceipts, 
   getAllBankPayments 
 } from "@/lib/firestore/paymentsRepository";
+import { getDocuments } from "@/lib/firestore/genericRepository";
 
 function getDayStr(d: any): string {
   if (!d) return "";
@@ -170,81 +171,88 @@ export async function GET(req: Request) {
       };
     };
 
-    const anchorDateStr = "2026-08-10";
-    const anchor10Aug = {
-      cbOpening: 876808,
-      cbReceipts: 110350,
-      cbPayments: 275590,
-      cbClosing: 711568,
+    // Calculate opening balances dynamically from accounts, parties, and prior transactions
+    const accounts = await getDocuments("accounts");
+    const cashBankAccounts = accounts.filter((a: any) => 
+      ["cash", "bank"].includes(String(a.type || "").toLowerCase()) ||
+      ["1111", "1110"].includes(String(a.code || ""))
+    );
+    const initialCbOpening = cashBankAccounts.reduce((sum: number, a: any) => sum + (Number(a.openingBalance) || 0), 0);
+    const initialRecOpening = customers.reduce((sum: number, c: any) => sum + (Number(c.openingBalance) || 0), 0);
+    const initialPayOpening = vendors.reduce((sum: number, v: any) => sum + (Number(v.openingBalance) || 0), 0);
 
-      recOpening: 4792526,
-      recDebits: 13550,
-      recCredits: 17700,
-      recClosing: 4788376,
+    let priorCbReceipts = 0;
+    let priorCbPayments = 0;
+    let priorRecDebits = 0;
+    let priorRecCredits = 0;
+    let priorPayCredits = 0;
+    let priorPayDebits = 0;
 
-      payOpening: 2609838,
-      payCredits: 50000,
-      payDebits: 100000,
-      payClosing: 2559838,
+    allInvoices.forEach((i: any) => {
+      const dStr = getDayStr(i.date || i.createdAt);
+      if (dStr && dStr < targetDateStr && i.status !== "cancelled" && i.status !== "Cancelled") {
+        const total = Number(i.totalAmount) || 0;
+        const method = (i.paymentMethod || i.paymentTerms || "").toLowerCase();
+        const isCredit = method.includes("credit") || i.isCreditBill || i.isOnCredit;
+        const paidAtCreation = isCredit ? (Number(i.amountReceived) || Number(i.amountPaid) || 0) : total;
 
-      salesToday: 74400
-    };
-
-    let cbOpening = anchor10Aug.cbOpening;
-    let recOpening = anchor10Aug.recOpening;
-    let payOpening = anchor10Aug.payOpening;
-    let todaySum: any = {};
-
-    if (targetDateStr <= anchorDateStr) {
-      cbOpening = anchor10Aug.cbOpening;
-      recOpening = anchor10Aug.recOpening;
-      payOpening = anchor10Aug.payOpening;
-
-      todaySum = {
-        salesToday: anchor10Aug.salesToday,
-        salesCount: 1,
-        purchasesToday: anchor10Aug.payCredits,
-        purchasesCount: 1,
-        recDebits: anchor10Aug.recDebits,
-        recCredits: anchor10Aug.recCredits,
-        payCredits: anchor10Aug.payCredits,
-        payDebits: anchor10Aug.payDebits,
-        cbReceipts: anchor10Aug.cbReceipts,
-        cbPayments: anchor10Aug.cbPayments,
-        expensesToday: 0
-      };
-    } else {
-      cbOpening = anchor10Aug.cbClosing;
-      recOpening = anchor10Aug.recClosing;
-      payOpening = anchor10Aug.payClosing;
-
-      let cur = new Date("2026-08-11T00:00:00.000Z");
-      const target = new Date(targetDateStr + "T00:00:00.000Z");
-      while (cur < target) {
-        const curStr = cur.toISOString().slice(0, 10);
-        const daySum = getDailySummary(curStr);
-        if (curStr === "2026-08-11") {
-          daySum.recDebits = 6600;
-          daySum.cbReceipts = 107700;
-          daySum.cbPayments = 8220;
+        if (["sale", "non_tax_sale", "challan", "pos", "pos_counter_sale", "tax_sale", "sale_invoice"].includes(i.type)) {
+          priorRecDebits += Math.max(0, total - paidAtCreation);
+          priorCbReceipts += Math.min(total, paidAtCreation);
+        } else if (["purchase", "non_tax_purchase", "import_purchase", "tax_purchase", "purchase_invoice"].includes(i.type)) {
+          priorPayCredits += Math.max(0, total - paidAtCreation);
+          priorCbPayments += Math.min(total, paidAtCreation);
         }
-        if (curStr === "2026-08-17") {
-          daySum.cbPayments += 1000;
-          daySum.payDebits += 500;
-        }
-        cbOpening += (daySum.cbReceipts - daySum.cbPayments);
-        recOpening += (daySum.recDebits - daySum.recCredits);
-        payOpening += (daySum.payCredits - daySum.payDebits);
-        cur.setUTCDate(cur.getUTCDate() + 1);
       }
+    });
 
-      todaySum = getDailySummary(targetDateStr);
-      if (targetDateStr === "2026-08-11") {
-        todaySum.recDebits = 6600;
-        todaySum.cbReceipts = 107700;
-        todaySum.cbPayments = 8220;
+    allCR.forEach((r: any) => {
+      const dStr = getDayStr(r.date || r.createdAt);
+      if (dStr && dStr < targetDateStr && r.status !== "Cancelled") {
+        const amt = Number(r.amount) || 0;
+        const pid = String(r.partyId?._id || r.partyId || r.party || "");
+        if (customerIds.has(pid)) priorRecCredits += amt;
+        priorCbReceipts += amt;
       }
-    }
+    });
+
+    allBR.forEach((r: any) => {
+      const dStr = getDayStr(r.date || r.createdAt);
+      if (dStr && dStr < targetDateStr && r.status !== "Cancelled") {
+        const amt = Number(r.amount) || 0;
+        const pid = String(r.partyId?._id || r.partyId || r.party || "");
+        if (customerIds.has(pid)) priorRecCredits += amt;
+        priorCbReceipts += amt;
+      }
+    });
+
+    allCP.forEach((p: any) => {
+      const dStr = getDayStr(p.date || p.createdAt);
+      if (dStr && dStr < targetDateStr && p.status !== "Cancelled") {
+        const amt = Number(p.amount) || 0;
+        const pid = String(p.partyId?._id || p.partyId || p.vendor || p.customer || "");
+        if (customerIds.has(pid)) priorRecDebits += amt;
+        if (vendorIds.has(pid)) priorPayDebits += amt;
+        priorCbPayments += amt;
+      }
+    });
+
+    allBP.forEach((p: any) => {
+      const dStr = getDayStr(p.date || p.createdAt);
+      if (dStr && dStr < targetDateStr && p.status !== "Cancelled") {
+        const amt = Number(p.amount) || 0;
+        const pid = String(p.partyId?._id || p.partyId || p.vendor || p.customer || "");
+        if (customerIds.has(pid)) priorRecDebits += amt;
+        if (vendorIds.has(pid)) priorPayDebits += amt;
+        priorCbPayments += amt;
+      }
+    });
+
+    const cbOpening = initialCbOpening + priorCbReceipts - priorCbPayments;
+    const recOpening = initialRecOpening + priorRecDebits - priorRecCredits;
+    const payOpening = initialPayOpening + priorPayCredits - priorPayDebits;
+
+    const todaySum = getDailySummary(targetDateStr);
 
     const salesInvoicesAll = allInvoices.filter((i: any) =>
       ["sale", "non_tax_sale", "challan", "pos", "pos_counter_sale", "tax_sale", "sale_invoice"].includes(i.type) &&
@@ -297,13 +305,7 @@ export async function GET(req: Request) {
         color: categoryColors[idx % categoryColors.length]
       })).sort((a, b) => b.value - a.value).slice(0, 6);
 
-    if (categoryData.length === 0) {
-      categoryData = [
-        { name: "Engine Oils", value: 1850000, color: "#881337" },
-        { name: "Hydraulic Oils", value: 920000, color: "#be123c" }
-      ];
-    }
-
+    // Pure dynamic product sales mapping
     const productSalesMap: Record<string, { name: string; qty: number; amount: number }> = {};
     salesInvoicesAll.forEach((inv: any) => {
       (inv.items || inv.lines || []).forEach((item: any) => {
@@ -324,7 +326,7 @@ export async function GET(req: Request) {
         name: p.name,
         qty: p.qty + " Qty",
         amount: "Rs." + Math.round(p.amount).toLocaleString(),
-        trend: "+5%"
+        trend: "+0%"
       }));
 
     const customerSalesMap: Record<string, { name: string; amount: number; orders: number }> = {};
@@ -360,21 +362,14 @@ export async function GET(req: Request) {
                         .reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
       flowData.push({ month: mName, inflow: Math.round(inflow), outflow: Math.round(outflow) });
     }
-    if (flowData.every(f => f.inflow === 0 && f.outflow === 0)) {
-      flowData[flowData.length - 1] = {
-        month: "Aug",
-        inflow: todaySum.cbReceipts || 110350,
-        outflow: todaySum.cbPayments || 275590
-      };
-    }
 
     const currentCashBank = Math.round(cbOpening + todaySum.cbReceipts - todaySum.cbPayments);
     const currentReceivables = Math.round(recOpening + todaySum.recDebits - todaySum.recCredits);
     const currentPayables = Math.round(payOpening + todaySum.payCredits - todaySum.payDebits);
     const workingCapital = Math.round(currentCashBank + currentReceivables - currentPayables);
 
-    const grossMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll) / totalSalesAll) * 100).toFixed(1)) : 21.6;
-    const netMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll - totalExpensesAll) / totalSalesAll) * 100).toFixed(1)) : 18.0;
+    const grossMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll) / totalSalesAll) * 100).toFixed(1)) : 0;
+    const netMarginPercent = totalSalesAll > 0 ? Number((((totalSalesAll - totalPurchasesAll - totalExpensesAll) / totalSalesAll) * 100).toFixed(1)) : 0;
     const returnRate = salesInvoicesAll.length > 0 ? Number(((saleReturnInvoicesAll.length / salesInvoicesAll.length) * 100).toFixed(1)) : 0;
 
     return ok({
@@ -384,18 +379,18 @@ export async function GET(req: Request) {
       purchasesCountToday: todaySum.purchasesCount,
       expensesToday: todaySum.expensesToday,
 
-      totalSales: totalSalesAll > 0 ? totalSalesAll : 1250000,
-      salesCount: salesInvoicesAll.length > 0 ? salesInvoicesAll.length : 18,
-      totalPurchases: totalPurchasesAll > 0 ? totalPurchasesAll : 980000,
-      purchaseCount: purchaseInvoicesAll.length > 0 ? purchaseInvoicesAll.length : 12,
-      totalExpenses: totalExpensesAll > 0 ? totalExpensesAll : 45000,
-      totalStockValue: totalStockValue > 0 ? totalStockValue : 3425000,
-      totalItemCount: allItems.length > 0 ? allItems.length : 42,
-      totalCustomersCount: customers.length > 0 ? customers.length : 15,
-      totalVendorsCount: vendors.length > 0 ? vendors.length : 8,
-      totalCustomerReceivables: totalCustomerReceivables > 0 ? totalCustomerReceivables : 4788376,
-      totalVendorPayables: totalVendorPayables > 0 ? totalVendorPayables : 2559838,
-      lowStockCount: lowStockCount > 0 ? lowStockCount : 3,
+      totalSales: totalSalesAll,
+      salesCount: salesInvoicesAll.length,
+      totalPurchases: totalPurchasesAll,
+      purchaseCount: purchaseInvoicesAll.length,
+      totalExpenses: totalExpensesAll,
+      totalStockValue: totalStockValue,
+      totalItemCount: allItems.length,
+      totalCustomersCount: customers.length,
+      totalVendorsCount: vendors.length,
+      totalCustomerReceivables: totalCustomerReceivables,
+      totalVendorPayables: totalVendorPayables,
+      lowStockCount: lowStockCount,
 
       cashBank: {
         opening: Math.round(cbOpening),
